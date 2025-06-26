@@ -7,7 +7,7 @@
   "name": "sst",
   "version": "2.49.2",
   "bin": {
-    "sst": "dist/cli/sst.js"
+    "sst": "cli/sst.js"
   },
   "description": "A CLI to help deploy SST apps.",
   "type": "module",
@@ -24,14 +24,14 @@
     "directory": "packages/cli"
   },
   "exports": {
-    "./constructs/deprecated": "./dist/constructs/deprecated/index.js",
-    "./constructs/future": "./dist/constructs/future/index.js",
-    "./constructs": "./dist/constructs/index.js",
-    "./context": "./dist/context/index.js",
-    "./node/future/*": "./dist/node/future/*/index.js",
-    "./node/*": "./dist/node/*/index.js",
-    ".": "./dist/index.js",
-    "./*": "./dist/*"
+    "./constructs/deprecated": "./constructs/deprecated/index.js",
+    "./constructs/future": "./constructs/future/index.js",
+    "./constructs": "./constructs/index.js",
+    "./context": "./context/index.js",
+    "./node/future/*": "./node/future/*/index.js",
+    "./node/*": "./node/*/index.js",
+    ".": "./index.js",
+    "./*": "./*"
   },
   "homepage": "https://sst.dev",
   "dependencies": {
@@ -72,7 +72,7 @@
     "chalk": "^5.2.0",
     "chokidar": "^3.5.3",
     "ci-info": "^3.7.0",
-    "colorette": "^2.0.20",
+    "colorette": "^2.0.19",
     "conf": "^10.2.0",
     "constructs": "10.3.0",
     "cross-spawn": "^7.0.3",
@@ -80,7 +80,7 @@
     "dotenv": "^16.0.3",
     "esbuild": "0.18.13",
     "express": "^4.18.2",
-    "fast-jwt": "^3.3.3",
+    "fast-jwt": "^5.0.5",
     "get-port": "^6.1.2",
     "glob": "^10.0.0",
     "graphql": "*",
@@ -88,9 +88,9 @@
     "immer": "9",
     "ink": "^4.0.0",
     "ink-spinner": "^5.0.0",
-    "kysely": "^0.27.4",
+    "kysely": "^0.25.0",
     "kysely-codegen": "^0.10.1",
-    "kysely-data-api": "^1.0.1",
+    "kysely-data-api": "^0.2.1",
     "minimatch": "^6.1.6",
     "openid-client": "^5.1.8",
     "ora": "^6.1.2",
@@ -145,6 +145,7 @@
   "bugs": {
     "url": "https://github.com/sst/v2/issues"
   },
+  "main": "index.js",
   "directories": {
     "test": "test"
   },
