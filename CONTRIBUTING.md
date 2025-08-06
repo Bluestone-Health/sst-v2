@@ -85,7 +85,7 @@ _Note_: For the bluestone health fork of sst v2, if `pnpm link` does not work, y
   "pnpm": {
    ...
     "overrides": {
-      "sst": "link:./path/to/sst/packages/sst/dist"
+      "sst": "file:./path/to/sst/packages/sst/dist"
     }
   }
 }

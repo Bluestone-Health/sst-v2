@@ -39,13 +39,13 @@ export class Schedule extends Construct implements SSTConstruct {
       throw new Error(`Missing "schedule" in the "${this.node.id}" Schedule`);
     }
 
-    let jobDefinition: string;
+    let jobDefinition: FunctionDefinition;
     let jobTargetOverride: Partial<CfnSchedule.TargetProperty> = {};
 
     if (typeof props.job === 'string') {
       jobDefinition = props.job;
     } else if (typeof props.job === 'object' && 'function' in props.job) {
-      jobDefinition = props.job.function.toString();
+      jobDefinition = props.job.function;
       jobTargetOverride = props.job.cdk?.target ?? {};
     } else {
       throw new Error(
