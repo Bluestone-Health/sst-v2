@@ -6,6 +6,30 @@ import { DataApiDialect } from "kysely-data-api";
 import { RDSData } from "@aws-sdk/client-rds-data";
 import url from "url";
 
+/**
+ *
+ * @param {Function} fn - function to retry
+ * @param {number} maxRetries - default 3
+ * @param {number} initialDelay - in milliseconds
+ * @returns {Promise<*>}
+ */
+async function retry(fn, maxRetries = 3, initialDelay = 2000) {
+  let delay = initialDelay;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (i === maxRetries - 1) throw error;
+      console.log(
+        `Migration attempt ${i + 1} failed, retrying in ${delay}ms:`,
+        error.message
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      delay = Math.min(delay * 2, 30000); // exponential backoff, max 30s
+    }
+  }
+}
+
 export async function handler(evt) {
   console.log("initializing db");
   const db = new Kysely({
@@ -38,26 +62,32 @@ export async function handler(evt) {
   console.log("processing event", evt);
   if (!evt.type || evt.type === "latest") {
     console.log("migrating to latest");
-    const result = await migrator.migrateToLatest();
-    const err =
-      result.error || result.results?.find((r) => r.status === "Error");
-    if (err) throw err;
+    const result = await retry(async () => {
+      const res = await migrator.migrateToLatest();
+      const err = res.error || res.results?.find((r) => r.status === "Error");
+      if (err) throw err;
+      return res;
+    });
     return result;
   }
 
   if (evt.type === "to") {
     console.log("migrating to", evt.data.name);
-    if (!evt.data.name) return await migrator.migrateTo(NO_MIGRATIONS);
-    const result = await migrator.migrateTo(evt.data.name);
-    const err =
-      result.error || result.results?.find((r) => r.status === "Error");
-    if (err) throw err;
+    if (!evt.data.name) {
+      return await retry(async () => await migrator.migrateTo(NO_MIGRATIONS));
+    }
+    const result = await retry(async () => {
+      const res = await migrator.migrateTo(evt.data.name);
+      const err = res.error || res.results?.find((r) => r.status === "Error");
+      if (err) throw err;
+      return res;
+    });
     return result;
   }
 
   if (evt.type === "list") {
     console.log("listing migrations");
-    return await migrator.getMigrations();
+    return await retry(async () => await migrator.getMigrations());
   }
 }
 
