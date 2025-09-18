@@ -12,6 +12,7 @@ export * from "./Queue.js";
 export * from "./Stack.js";
 export * from "./Table.js";
 export * from "./Topic.js";
+export * from "./Transfer.js";
 export * from "./Bucket.js";
 export * from "./Script.js";
 export * from "./Service.js";
