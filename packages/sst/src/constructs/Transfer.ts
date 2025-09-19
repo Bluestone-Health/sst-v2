@@ -468,15 +468,18 @@ export class Transfer extends Construct implements SSTConstruct {
     } else if (bucket) {
       // Use provided bucket construct
       this.cdk.bucket = bucket;
-    } else if (cdk?.bucket && "bucketName" in cdk.bucket) {
+    } else if (
+      cdk?.bucket &&
+      typeof (cdk.bucket as IBucket).applyRemovalPolicy === "function"
+    ) {
+      // Use provided bucket construct from CDK override
+      this.cdk.bucket = cdk.bucket as IBucket;
+    } else if (cdk?.bucket) {
       // Create new bucket with CDK props
       this.cdk.bucket = new CDKBucket(this, "Bucket", {
         removalPolicy: RemovalPolicy.RETAIN,
         ...cdk.bucket,
       });
-    } else if (cdk?.bucket) {
-      // Use provided bucket construct from CDK override
-      this.cdk.bucket = cdk.bucket as IBucket;
     } else {
       // Create default bucket
       const app = this.node.root as App;
@@ -542,6 +545,9 @@ export class Transfer extends Construct implements SSTConstruct {
       endpointType,
       securityPolicyName,
       loggingRole: this.cdk.loggingRole?.roleArn,
+      ...(protocols.includes("FTPS") && this.cdk.certificate?.certificateArn
+        ? { certificate: this.cdk.certificate.certificateArn }
+        : {}),
       ...(cdk?.server &&
       typeof cdk.server === "object" &&
       !("attrArn" in cdk.server)
@@ -593,7 +599,11 @@ export class Transfer extends Construct implements SSTConstruct {
       return;
     }
 
-    const domainData = transferDomain.buildTransferDomainData(this, domain);
+    const domainData = transferDomain.buildTransferDomainData(
+      this,
+      domain,
+      this.props.protocols || ["SFTP"]
+    );
     if (!domainData) {
       return;
     }
@@ -608,7 +618,7 @@ export class Transfer extends Construct implements SSTConstruct {
 
     // Create DNS record pointing to the Transfer Family endpoint
     if (domainData.hostedZone) {
-      this.cdk.domainRecord = transferDomain.createARecord(
+      this.cdk.domainRecord = transferDomain.createCNAMERecord(
         this,
         domainData.hostedZone,
         domainData.domainName,

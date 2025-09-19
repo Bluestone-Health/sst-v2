@@ -14,20 +14,21 @@ export interface TransferDomainData {
 
 export function buildTransferDomainData(
   scope: Construct,
-  customDomain: string | TransferDomainProps | undefined
+  customDomain: string | TransferDomainProps | undefined,
+  protocols: ("SFTP" | "FTPS" | "FTP")[] = ["SFTP"]
 ): TransferDomainData | undefined {
   if (customDomain === undefined) {
     return;
   }
   // customDomain is a string
   else if (typeof customDomain === "string") {
-    return buildDataForStringInput(scope, customDomain);
+    return buildDataForStringInput(scope, customDomain, protocols);
   }
   // customDomain.domainName is a string
   else if (customDomain.domainName) {
     return customDomain.isExternalDomain
-      ? buildDataForExternalDomainInput(scope, customDomain)
-      : buildDataForInternalDomainInput(scope, customDomain);
+      ? buildDataForExternalDomainInput(scope, customDomain, protocols)
+      : buildDataForInternalDomainInput(scope, customDomain, protocols);
   }
   // customDomain.domainName not exists
   throw new Error(
@@ -37,7 +38,8 @@ export function buildTransferDomainData(
 
 function buildDataForStringInput(
   scope: Construct,
-  customDomain: string
+  customDomain: string,
+  protocols: ("SFTP" | "FTPS" | "FTP")[]
 ): TransferDomainData {
   // validate: customDomain is a TOKEN string
   // ie. imported SSM value: ssm.StringParameter.valueForStringParameter()
@@ -50,22 +52,31 @@ function buildDataForStringInput(
   assertDomainNameIsLowerCase(customDomain);
 
   const domainName = customDomain;
+  const domainParts = domainName.split(".");
+  if (domainParts.length > 3) {
+    throw new Error(
+      `For domains with more than 3 parts, please use the object form and specify the "hostedZone" explicitly to avoid incorrect lookups.`
+    );
+  }
   const hostedZoneDomain = parseRoute53Domain(domainName);
   const hostedZone = lookupHostedZone(scope, hostedZoneDomain);
-  const certificate = createCertificate(scope, domainName, hostedZone);
+  const certificate = protocols.includes("FTPS")
+    ? createCertificate(scope, domainName, hostedZone)
+    : undefined;
 
   return {
     domainName,
     certificate,
     hostedZone,
-    isCertificateCreated: true,
+    isCertificateCreated: protocols.includes("FTPS"),
     url: buildDomainUrl(domainName),
   };
 }
 
 function buildDataForInternalDomainInput(
   scope: Construct,
-  customDomain: TransferDomainProps
+  customDomain: TransferDomainProps,
+  protocols: ("SFTP" | "FTPS" | "FTP")[]
 ): TransferDomainData {
   // If customDomain is a TOKEN string, "hostedZone" has to be passed in. This
   // is because "hostedZone" cannot be parsed from a TOKEN value.
@@ -100,14 +111,17 @@ function buildDataForInternalDomainInput(
   // Create certificate
   // Note: Allow user passing in `certificate` object. The use case is for
   //       user to create wildcard certificate or using an imported certificate.
-  let certificate: acm.ICertificate;
+  let certificate: acm.ICertificate | undefined;
   let isCertificateCreated: boolean;
   if (customDomain.cdk?.certificate) {
     certificate = customDomain.cdk.certificate;
     isCertificateCreated = false;
-  } else {
+  } else if (protocols.includes("FTPS")) {
     certificate = createCertificate(scope, domainName, hostedZone);
     isCertificateCreated = true;
+  } else {
+    certificate = undefined;
+    isCertificateCreated = false;
   }
 
   return {
@@ -121,7 +135,8 @@ function buildDataForInternalDomainInput(
 
 function buildDataForExternalDomainInput(
   scope: Construct,
-  customDomain: TransferDomainProps
+  customDomain: TransferDomainProps,
+  protocols: ("SFTP" | "FTPS" | "FTP")[]
 ): TransferDomainData {
   const domainName = customDomain.domainName!;
 
@@ -196,20 +211,15 @@ function assertDomainNameIsLowerCase(domainName: string): void {
   }
 }
 
-export function createARecord(
+export function createCNAMERecord(
   scope: Construct,
   hostedZone: route53.IHostedZone,
   domainName: string,
   targetDomainName: string
-): route53.ARecord {
-  return new route53.ARecord(scope, "ARecord", {
+): route53.CnameRecord {
+  return new route53.CnameRecord(scope, "CnameRecord", {
     zone: hostedZone,
     recordName: domainName,
-    target: route53.RecordTarget.fromAlias({
-      bind: () => ({
-        dnsName: targetDomainName,
-        hostedZoneId: hostedZone.hostedZoneId,
-      }),
-    }),
+    domainName: targetDomainName,
   });
 }
