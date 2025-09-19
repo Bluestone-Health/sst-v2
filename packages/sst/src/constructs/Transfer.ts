@@ -1,5 +1,5 @@
 import { Construct } from "constructs";
-import { RemovalPolicy } from "aws-cdk-lib/core";
+import { RemovalPolicy, Stack as CdkStack } from "aws-cdk-lib/core";
 import {
   CfnServer,
   CfnServerProps,
@@ -314,7 +314,8 @@ export class Transfer extends Construct implements SSTConstruct {
    * The endpoint of the Transfer server.
    */
   public get endpoint(): string {
-    return this.cdk.server.attrEndpoint;
+    const region = CdkStack.of(this).region;
+    return `s-${this.serverId}.server.transfer.${region}.amazonaws.com`;
   }
 
   /**
@@ -539,31 +540,16 @@ export class Transfer extends Construct implements SSTConstruct {
       cdk,
     } = this.props;
 
-    const serverProps: CfnServerProps = {
-      protocols,
-      identityProviderType,
-      endpointType,
-      securityPolicyName,
-      loggingRole: this.cdk.loggingRole?.roleArn,
-      ...(protocols.includes("FTPS") && this.cdk.certificate?.certificateArn
-        ? { certificate: this.cdk.certificate.certificateArn }
-        : {}),
-      ...(cdk?.server &&
-      typeof cdk.server === "object" &&
-      !("attrArn" in cdk.server)
-        ? cdk.server
-        : {}),
-    };
-
-    // Configure VPC endpoint details
+    // Build endpointDetails if VPC endpoint is needed
+    let endpointDetails: any = undefined;
     if (endpointType === "VPC" && vpc) {
-      const vpcEndpointDetails: any = {
+      endpointDetails = {
         vpcId: vpc.vpcId,
         subnetIds: vpc.privateSubnets.map((subnet) => subnet.subnetId),
       };
 
       if (securityGroups && securityGroups.length > 0) {
-        vpcEndpointDetails.securityGroupIds = securityGroups.map(
+        endpointDetails.securityGroupIds = securityGroups.map(
           (sg) => sg.securityGroupId
         );
       } else {
@@ -577,11 +563,26 @@ export class Transfer extends Construct implements SSTConstruct {
         // Allow SFTP traffic
         defaultSg.addIngressRule(Peer.anyIpv4(), Port.tcp(22), "SFTP access");
 
-        vpcEndpointDetails.securityGroupIds = [defaultSg.securityGroupId];
+        endpointDetails.securityGroupIds = [defaultSg.securityGroupId];
       }
-
-      serverProps.endpointDetails = vpcEndpointDetails;
     }
+
+    const serverProps: CfnServerProps = {
+      protocols,
+      identityProviderType,
+      endpointType,
+      securityPolicyName,
+      loggingRole: this.cdk.loggingRole?.roleArn,
+      ...(endpointDetails && { endpointDetails }),
+      ...(protocols.includes("FTPS") && this.cdk.certificate?.certificateArn
+        ? { certificate: this.cdk.certificate.certificateArn }
+        : {}),
+      ...(cdk?.server &&
+      typeof cdk.server === "object" &&
+      !("attrArn" in cdk.server)
+        ? cdk.server
+        : {}),
+    };
 
     if (cdk?.server && "attrArn" in cdk.server) {
       // Use provided CDK server construct
@@ -622,7 +623,7 @@ export class Transfer extends Construct implements SSTConstruct {
         this,
         domainData.hostedZone,
         domainData.domainName,
-        this.cdk.server.attrEndpoint
+        this.endpoint
       );
     }
   }
@@ -655,23 +656,16 @@ export class Transfer extends Construct implements SSTConstruct {
       homeDirectoryType,
       sshPublicKeys,
       tags: Object.entries(tags).map(([key, value]) => ({ key, value })),
+      ...(homeDirectory && { homeDirectory }),
+      ...(posixProfile && {
+        posixProfile: {
+          uid: posixProfile.uid,
+          gid: posixProfile.gid,
+          secondaryGids: posixProfile.secondaryGids,
+        },
+      }),
+      ...(policy && { policy }),
     };
-
-    if (homeDirectory) {
-      userCfnProps.homeDirectory = homeDirectory;
-    }
-
-    if (posixProfile) {
-      userCfnProps.posixProfile = {
-        uid: posixProfile.uid,
-        gid: posixProfile.gid,
-        secondaryGids: posixProfile.secondaryGids,
-      };
-    }
-
-    if (policy) {
-      userCfnProps.policy = policy;
-    }
 
     const user = new CfnUser(this, `User-${username}`, userCfnProps);
     this.users[username] = user;
