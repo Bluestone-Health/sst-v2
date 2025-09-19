@@ -8,7 +8,7 @@ export interface TransferDomainData {
   readonly domainName: string;
   readonly certificate?: acm.ICertificate;
   readonly hostedZone?: route53.IHostedZone;
-  readonly isCertificatedCreated: boolean;
+  readonly isCertificateCreated: boolean;
   readonly url: string;
 }
 
@@ -30,7 +30,9 @@ export function buildTransferDomainData(
       : buildDataForInternalDomainInput(scope, customDomain);
   }
   // customDomain.domainName not exists
-  throw new Error(`Missing "domainName" in Transfer construct's domain setting`);
+  throw new Error(
+    `Missing "domainName" in Transfer construct's domain setting`
+  );
 }
 
 function buildDataForStringInput(
@@ -56,7 +58,7 @@ function buildDataForStringInput(
     domainName,
     certificate,
     hostedZone,
-    isCertificatedCreated: true,
+    isCertificateCreated: true,
     url: buildDomainUrl(domainName),
   };
 }
@@ -99,20 +101,20 @@ function buildDataForInternalDomainInput(
   // Note: Allow user passing in `certificate` object. The use case is for
   //       user to create wildcard certificate or using an imported certificate.
   let certificate: acm.ICertificate;
-  let isCertificatedCreated: boolean;
+  let isCertificateCreated: boolean;
   if (customDomain.cdk?.certificate) {
     certificate = customDomain.cdk.certificate;
-    isCertificatedCreated = false;
+    isCertificateCreated = false;
   } else {
     certificate = createCertificate(scope, domainName, hostedZone);
-    isCertificatedCreated = true;
+    isCertificateCreated = true;
   }
 
   return {
     domainName,
     certificate,
     hostedZone,
-    isCertificatedCreated,
+    isCertificateCreated,
     url: buildDomainUrl(domainName),
   };
 }
@@ -130,21 +132,21 @@ function buildDataForExternalDomainInput(
 
   // Create certificate (required even for external domains if we want TLS)
   let certificate: acm.ICertificate | undefined;
-  let isCertificatedCreated: boolean;
+  let isCertificateCreated: boolean;
   if (customDomain.cdk?.certificate) {
     certificate = customDomain.cdk.certificate;
-    isCertificatedCreated = false;
+    isCertificateCreated = false;
   } else {
     // For external domains, user needs to provide certificate
     certificate = undefined;
-    isCertificatedCreated = false;
+    isCertificateCreated = false;
   }
 
   return {
     domainName,
     certificate,
     hostedZone: undefined,
-    isCertificatedCreated,
+    isCertificateCreated,
     url: buildDomainUrl(domainName),
   };
 }
@@ -154,11 +156,11 @@ function parseRoute53Domain(domainName: string): string {
   if (domainParts.length < 2) {
     throw new Error(`Invalid domain name: ${domainName}`);
   }
-  
+
   // For subdomain like sftp.example.com, return example.com
   // For apex domain like example.com, return example.com
-  return domainParts.length === 2 
-    ? domainName 
+  return domainParts.length === 2
+    ? domainName
     : domainParts.slice(-2).join(".");
 }
 
@@ -183,7 +185,7 @@ function createCertificate(
 }
 
 function buildDomainUrl(domainName: string): string {
-  return `https://${domainName}`;
+  return `sftp://${domainName}`;
 }
 
 function assertDomainNameIsLowerCase(domainName: string): void {
@@ -206,7 +208,7 @@ export function createARecord(
     target: route53.RecordTarget.fromAlias({
       bind: () => ({
         dnsName: targetDomainName,
-        hostedZoneId: "Z3AQBSTGFYJSTF", // This is the hosted zone ID for Transfer Family endpoints
+        hostedZoneId: hostedZone.hostedZoneId,
       }),
     }),
   });

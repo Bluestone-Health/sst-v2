@@ -1,22 +1,22 @@
 import { Construct } from "constructs";
 import { RemovalPolicy } from "aws-cdk-lib/core";
-import { 
+import {
   CfnServer,
   CfnServerProps,
   CfnUser,
-  CfnUserProps
+  CfnUserProps,
 } from "aws-cdk-lib/aws-transfer";
 import {
   IBucket,
   Bucket as CDKBucket,
-  BucketProps as CDKBucketProps
+  BucketProps as CDKBucketProps,
 } from "aws-cdk-lib/aws-s3";
 import {
   IVpc,
   ISecurityGroup,
   SecurityGroup,
   Port,
-  Peer
+  Peer,
 } from "aws-cdk-lib/aws-ec2";
 import {
   Role,
@@ -24,7 +24,7 @@ import {
   PolicyDocument,
   PolicyStatement,
   IRole,
-  ManagedPolicy
+  ManagedPolicy,
 } from "aws-cdk-lib/aws-iam";
 import * as route53 from "aws-cdk-lib/aws-route53";
 import * as acm from "aws-cdk-lib/aws-certificatemanager";
@@ -105,14 +105,14 @@ export interface TransferUserProps {
 export interface TransferProps {
   /**
    * Custom domain configuration for the SFTP endpoint.
-   * 
+   *
    * @example
    * ```js
    * new Transfer(stack, "Transfer", {
    *   domain: "sftp.example.com"
    * });
    * ```
-   * 
+   *
    * @example
    * ```js
    * new Transfer(stack, "Transfer", {
@@ -124,22 +124,25 @@ export interface TransferProps {
    * ```
    */
   domain?: string | TransferDomainProps;
-  
+
   /**
    * Protocols supported by the server.
    * @default ["SFTP"]
    */
   protocols?: ("SFTP" | "FTPS" | "FTP")[];
-  
+
   /**
    * Identity provider type.
    * @default "SERVICE_MANAGED"
    */
-  identityProviderType?: "SERVICE_MANAGED" | "API_GATEWAY" | "AWS_DIRECTORY_SERVICE";
-  
+  identityProviderType?:
+    | "SERVICE_MANAGED"
+    | "API_GATEWAY"
+    | "AWS_DIRECTORY_SERVICE";
+
   /**
    * Users to create on the server.
-   * 
+   *
    * @example
    * ```js
    * new Transfer(stack, "Transfer", {
@@ -153,39 +156,39 @@ export interface TransferProps {
    * ```
    */
   users?: Record<string, TransferUserProps>;
-  
+
   /**
    * S3 bucket for file storage. If not provided, a new bucket will be created.
    */
   bucket?: IBucket | string;
-  
+
   /**
    * Endpoint type configuration.
    * @default "PUBLIC"
    */
   endpointType?: "PUBLIC" | "VPC";
-  
+
   /**
    * VPC configuration for VPC endpoints. Required when endpointType is "VPC".
    */
   vpc?: IVpc;
-  
+
   /**
    * Security groups for VPC endpoints. If not provided, a default security group will be created.
    */
   securityGroups?: ISecurityGroup[];
-  
+
   /**
    * Enable CloudWatch logging.
    * @default true
    */
   logging?: boolean;
-  
+
   /**
    * IAM role for CloudWatch logging. If not provided, a role will be created automatically.
    */
   loggingRole?: IRole;
-  
+
   /**
    * Security policy for cryptographic algorithms.
    * @default "TransferSecurityPolicy-2020-06"
@@ -199,7 +202,7 @@ export interface TransferProps {
     id?: string;
     /**
      * Override the internally created Transfer server.
-     * 
+     *
      * @example
      * ```js
      * new Transfer(stack, "Transfer", {
@@ -421,7 +424,7 @@ export class Transfer extends Construct implements SSTConstruct {
           value: this.serverId,
         },
         endpoint: {
-          type: "plain", 
+          type: "plain",
           value: this.endpoint,
         },
       },
@@ -508,7 +511,7 @@ export class Transfer extends Construct implements SSTConstruct {
               new PolicyStatement({
                 actions: [
                   "logs:CreateLogGroup",
-                  "logs:CreateLogStream", 
+                  "logs:CreateLogStream",
                   "logs:DescribeLogGroups",
                   "logs:DescribeLogStreams",
                   "logs:PutLogEvents",
@@ -539,18 +542,24 @@ export class Transfer extends Construct implements SSTConstruct {
       endpointType,
       securityPolicyName,
       loggingRole: this.cdk.loggingRole?.roleArn,
-      ...(cdk?.server && typeof cdk.server === "object" && !("attrArn" in cdk.server) ? cdk.server : {}),
+      ...(cdk?.server &&
+      typeof cdk.server === "object" &&
+      !("attrArn" in cdk.server)
+        ? cdk.server
+        : {}),
     };
 
     // Configure VPC endpoint details
     if (endpointType === "VPC" && vpc) {
       const vpcEndpointDetails: any = {
         vpcId: vpc.vpcId,
-        subnetIds: vpc.privateSubnets.map(subnet => subnet.subnetId),
+        subnetIds: vpc.privateSubnets.map((subnet) => subnet.subnetId),
       };
 
       if (securityGroups && securityGroups.length > 0) {
-        vpcEndpointDetails.securityGroupIds = securityGroups.map(sg => sg.securityGroupId);
+        vpcEndpointDetails.securityGroupIds = securityGroups.map(
+          (sg) => sg.securityGroupId
+        );
       } else {
         // Create default security group
         const defaultSg = new SecurityGroup(this, "SecurityGroup", {
@@ -558,13 +567,9 @@ export class Transfer extends Construct implements SSTConstruct {
           description: "Security group for Transfer Family server",
           allowAllOutbound: true,
         });
-        
+
         // Allow SFTP traffic
-        defaultSg.addIngressRule(
-          Peer.anyIpv4(),
-          Port.tcp(22),
-          "SFTP access"
-        );
+        defaultSg.addIngressRule(Peer.anyIpv4(), Port.tcp(22), "SFTP access");
 
         vpcEndpointDetails.securityGroupIds = [defaultSg.securityGroupId];
       }

@@ -45,7 +45,7 @@ export interface CustomDomainData {
   readonly mappingKey?: string;
   readonly certificate?: acm.ICertificate;
   readonly isApigDomainCreated: boolean;
-  readonly isCertificatedCreated: boolean;
+  readonly isCertificateCreated: boolean;
   readonly url: string;
 }
 
@@ -99,7 +99,7 @@ function buildDataForStringInput(
     apigDomain,
     certificate,
     isApigDomainCreated: true,
-    isCertificatedCreated: true,
+    isCertificateCreated: true,
     url: buildDomainUrl(domainName),
   };
 }
@@ -142,13 +142,13 @@ function buildDataForInternalDomainInput(
   // Note: Allow user passing in `certificate` object. The use case is for
   //       user to create wildcard certificate or using an imported certificate.
   let certificate: acm.ICertificate;
-  let isCertificatedCreated: boolean;
+  let isCertificateCreated: boolean;
   if (customDomain.cdk?.certificate) {
     certificate = customDomain.cdk.certificate;
-    isCertificatedCreated = false;
+    isCertificateCreated = false;
   } else {
     certificate = createCertificate(scope, domainName, hostedZone);
-    isCertificatedCreated = true;
+    isCertificateCreated = true;
   }
 
   const apigDomain = createApigDomain(scope, domainName, certificate);
@@ -160,7 +160,7 @@ function buildDataForInternalDomainInput(
     mappingKey,
     certificate,
     isApigDomainCreated: true,
-    isCertificatedCreated,
+    isCertificateCreated,
     url: buildDomainUrl(domainName, mappingKey),
   };
 }
@@ -197,7 +197,7 @@ function buildDataForExternalDomainInput(
     mappingKey,
     certificate,
     isApigDomainCreated: true,
-    isCertificatedCreated: false,
+    isCertificateCreated: false,
     url: buildDomainUrl(domainName, mappingKey),
   };
 }
@@ -231,7 +231,7 @@ function buildDataForConstructInput(
     mappingKey,
     certificate: undefined,
     isApigDomainCreated: false,
-    isCertificatedCreated: false,
+    isCertificateCreated: false,
     url: buildDomainUrl(domainName, mappingKey),
   };
 }
