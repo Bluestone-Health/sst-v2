@@ -1060,7 +1060,7 @@ export class Api<
         if (customDomainData.isApigDomainCreated) {
           this.cdk.domainName = customDomainData.apigDomain as DomainName;
         }
-        if (customDomainData.isCertificateCreated) {
+        if (customDomainData.isCertificatedCreated) {
           this.cdk.certificate = customDomainData.certificate as Certificate;
         }
         defaultDomainMapping = {

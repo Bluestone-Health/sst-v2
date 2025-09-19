@@ -561,7 +561,7 @@ export class WebSocketApi extends Construct implements SSTConstruct {
         if (customDomainData.isApigDomainCreated) {
           this.cdk.domainName = customDomainData.apigDomain as apig.DomainName;
         }
-        if (customDomainData.isCertificateCreated) {
+        if (customDomainData.isCertificatedCreated) {
           this.cdk.certificate =
             customDomainData.certificate as acm.Certificate;
         }

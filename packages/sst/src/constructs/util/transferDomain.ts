@@ -8,7 +8,7 @@ export interface TransferDomainData {
   readonly domainName: string;
   readonly certificate?: acm.ICertificate;
   readonly hostedZone?: route53.IHostedZone;
-  readonly isCertificateCreated: boolean;
+  readonly isCertificatedCreated: boolean;
   readonly url: string;
 }
 
@@ -68,7 +68,7 @@ function buildDataForStringInput(
     domainName,
     certificate,
     hostedZone,
-    isCertificateCreated: protocols.includes("FTPS"),
+    isCertificatedCreated: protocols.includes("FTPS"),
     url: buildDomainUrl(domainName),
   };
 }
@@ -112,23 +112,23 @@ function buildDataForInternalDomainInput(
   // Note: Allow user passing in `certificate` object. The use case is for
   //       user to create wildcard certificate or using an imported certificate.
   let certificate: acm.ICertificate | undefined;
-  let isCertificateCreated: boolean;
+  let isCertificatedCreated: boolean;
   if (customDomain.cdk?.certificate) {
     certificate = customDomain.cdk.certificate;
-    isCertificateCreated = false;
+    isCertificatedCreated = false;
   } else if (protocols.includes("FTPS")) {
     certificate = createCertificate(scope, domainName, hostedZone);
-    isCertificateCreated = true;
+    isCertificatedCreated = true;
   } else {
     certificate = undefined;
-    isCertificateCreated = false;
+    isCertificatedCreated = false;
   }
 
   return {
     domainName,
     certificate,
     hostedZone,
-    isCertificateCreated,
+    isCertificatedCreated,
     url: buildDomainUrl(domainName),
   };
 }
@@ -147,21 +147,21 @@ function buildDataForExternalDomainInput(
 
   // Create certificate (required even for external domains if we want TLS)
   let certificate: acm.ICertificate | undefined;
-  let isCertificateCreated: boolean;
+  let isCertificatedCreated: boolean;
   if (customDomain.cdk?.certificate) {
     certificate = customDomain.cdk.certificate;
-    isCertificateCreated = false;
+    isCertificatedCreated = false;
   } else {
     // For external domains, user needs to provide certificate
     certificate = undefined;
-    isCertificateCreated = false;
+    isCertificatedCreated = false;
   }
 
   return {
     domainName,
     certificate,
     hostedZone: undefined,
-    isCertificateCreated,
+    isCertificatedCreated,
     url: buildDomainUrl(domainName),
   };
 }
