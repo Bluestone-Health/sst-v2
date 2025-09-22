@@ -50,8 +50,9 @@ export interface RDSv2Props {
     | 'postgresql13.12'
     | 'postgresql13.9'
     | 'postgresql14.10'
-    | 'postgresql15.5'
-    | 'postgresql16.1';
+    | 'postgresql15.12'
+    | 'postgresql16.1'
+    | 'postgresql17.4';
   defaultDatabaseName: string;
   scaling?: {
     minCapacity?: keyof typeof AuroraCapacityUnit | number;
@@ -218,8 +219,9 @@ export class RDSv2 extends Construct implements SSTConstruct {
       'postgresql13.12': AuroraPostgresEngineVersion.VER_13_12,
       'postgresql13.9': AuroraPostgresEngineVersion.VER_13_9,
       'postgresql14.10': AuroraPostgresEngineVersion.VER_14_10,
-      'postgresql15.5': AuroraPostgresEngineVersion.VER_15_5,
+      'postgresql15.12': AuroraPostgresEngineVersion.VER_15_12,
       'postgresql16.1': AuroraPostgresEngineVersion.VER_16_1,
+      'postgresql17.4': AuroraPostgresEngineVersion.VER_17_4,
     };
     return engine.includes('mysql')
       ? DatabaseClusterEngine.auroraMysql({ version: versions[engine] })
@@ -288,7 +290,7 @@ export class RDSv2 extends Construct implements SSTConstruct {
       handler: path.resolve(
         path.join(__dirname, '../support/rds-migrator/index.handler')
       ),
-      runtime: 'nodejs18.x',
+      runtime: 'nodejs22.x',
       timeout: 900,
       memorySize: 1024,
       environment: {
@@ -317,7 +319,7 @@ export class RDSv2 extends Construct implements SSTConstruct {
 
     const handler = new LambdaFunction(this, 'MigrationHandler', {
       code: Code.fromAsset(path.join(__dirname, '../support/script-function')),
-      runtime: Runtime.NODEJS_20_X,
+      runtime: Runtime.NODEJS_22_X,
       handler: 'index.handler',
       timeout: CDKDuration.minutes(15),
       memorySize: 1024,
