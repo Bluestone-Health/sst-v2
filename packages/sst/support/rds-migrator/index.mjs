@@ -20,7 +20,7 @@ async function retry(fn, maxRetries = 3, initialDelay = 2000) {
       return await fn();
     } catch (error) {
       if (i === maxRetries - 1) throw error;
-      console.log(
+      console.warn(
         `Migration attempt ${i + 1} failed, retrying in ${delay}ms:`,
         error.message
       );

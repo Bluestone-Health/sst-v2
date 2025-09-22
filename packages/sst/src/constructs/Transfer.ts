@@ -24,14 +24,12 @@ import {
   PolicyDocument,
   PolicyStatement,
   IRole,
-  ManagedPolicy,
 } from "aws-cdk-lib/aws-iam";
 import * as route53 from "aws-cdk-lib/aws-route53";
 import * as acm from "aws-cdk-lib/aws-certificatemanager";
 import * as logs from "aws-cdk-lib/aws-logs";
 
 import { App } from "./App.js";
-import { Stack } from "./Stack.js";
 import { SSTConstruct } from "./Construct.js";
 import { BindingResource, BindingProps } from "./util/binding.js";
 import { Permissions } from "./util/permission.js";
@@ -277,6 +275,7 @@ export class Transfer extends Construct implements SSTConstruct {
   private props: TransferProps;
   private _customDomainUrl?: string;
   private users: Record<string, CfnUser> = {};
+  private customHostnameTags?: Array<{ Key: string; Value: string }>;
 
   constructor(scope: Construct, id: string, props: TransferProps = {}) {
     super(scope, props.cdk?.id || id);
@@ -288,9 +287,9 @@ export class Transfer extends Construct implements SSTConstruct {
     this.validateProps();
     this.createBucket();
     this.createLoggingResources();
+    this.setupCustomDomain();
     this.createServer();
     this.createUsers();
-    this.setupCustomDomain();
 
     const app = this.node.root as App;
     app.registerTypes(this);
@@ -577,6 +576,7 @@ export class Transfer extends Construct implements SSTConstruct {
       ...(protocols.includes("FTPS") && this.cdk.certificate?.certificateArn
         ? { certificate: this.cdk.certificate.certificateArn }
         : {}),
+      ...(this.customHostnameTags && { tags: this.customHostnameTags }),
       ...(cdk?.server &&
       typeof cdk.server === "object" &&
       !("attrArn" in cdk.server)
@@ -616,6 +616,32 @@ export class Transfer extends Construct implements SSTConstruct {
 
     // Set custom domain URL
     this._customDomainUrl = domainData.url;
+
+    // Prepare custom hostname tags for the server
+    this.customHostnameTags = [
+      {
+        Key: "aws:transfer:customHostname",
+        Value: domainData.domainName,
+      },
+      // Add Route 53 hosted zone tag for custom hostname linking
+      ...(domainData.hostedZone
+        ? [
+            {
+              Key: "aws:transfer:route53HostedZoneId",
+              Value: domainData.hostedZone.hostedZoneId,
+            },
+          ]
+        : []),
+      // Add certificate tag for FTPS
+      ...(this.props.protocols?.includes("FTPS") && domainData.certificate
+        ? [
+            {
+              Key: "aws:transfer:customHostnameCertificate",
+              Value: domainData.certificate.certificateArn,
+            },
+          ]
+        : []),
+    ];
 
     // Create DNS record pointing to the Transfer Family endpoint
     if (domainData.hostedZone) {
