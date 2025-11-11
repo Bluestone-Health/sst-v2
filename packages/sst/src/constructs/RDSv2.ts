@@ -51,7 +51,8 @@ export interface RDSv2Props {
     | 'postgresql13.9'
     | 'postgresql14.10'
     | 'postgresql15.12'
-    | 'postgresql16.1';
+    | 'postgresql16.1'
+    | 'postgresql17.4';
   defaultDatabaseName: string;
   scaling?: {
     minCapacity?: keyof typeof AuroraCapacityUnit | number;
@@ -220,6 +221,7 @@ export class RDSv2 extends Construct implements SSTConstruct {
       'postgresql14.10': AuroraPostgresEngineVersion.VER_14_10,
       'postgresql15.12': AuroraPostgresEngineVersion.VER_15_12,
       'postgresql16.1': AuroraPostgresEngineVersion.VER_16_1,
+      'postgresql17.4': AuroraPostgresEngineVersion.VER_17_4,
     };
     return engine.includes('mysql')
       ? DatabaseClusterEngine.auroraMysql({ version: versions[engine] })
