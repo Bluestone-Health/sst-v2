@@ -76,6 +76,7 @@ $ pnpm sst dev
 # When done and you want to remove the link, run:
 $ pnpm unlink sst
 ```
+
 Note that we link to the `./dist` folder since that is where we publish out of.
 
 _Note_: For the bluestone health fork of sst v2, if `pnpm link` does not work, you can manually create the link. In the target project's `package.json`, update as follows:
@@ -90,6 +91,23 @@ _Note_: For the bluestone health fork of sst v2, if `pnpm link` does not work, y
   }
 }
 ```
+
+### Updating Dependencies in the BSH Fork
+
+When updating dependencies in `packages/sst/package.json`, you must manually sync the changes to `dist/package.json`:
+
+1. Update dependencies in `packages/sst/package.json`
+2. Run `pnpm install` to update lockfile and node_modules
+3. Run `pnpm build` to rebuild the package
+4. **Important**: Copy the updated `package.json` to `dist/`:
+   ```bash
+   cp packages/sst/package.json packages/sst/dist/package.json
+   ```
+5. Commit both files:
+   - `packages/sst/package.json`
+   - `packages/sst/dist/package.json`
+
+_Note_: The `dist/package.json` is tracked in git and must be kept in sync with the source `package.json`. The build process does not automatically copy this file.
 
 ### Packaging a BSH release
 
