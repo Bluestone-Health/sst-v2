@@ -501,9 +501,12 @@ export class NextjsSite extends SsrSite {
         removedPackages,
         bytesRemoved,
       });
-    } catch {
+    } catch (error) {
+      const errorDetails =
+        error instanceof Error ? error.stack ?? error.message : String(error);
       throw new VisibleError(
-        `There was a problem running "afterBuild" for the "${this.id}" site.`
+        `There was a problem running "afterBuild" for the "${this.id}" site.`,
+        errorDetails
       );
     }
   }
@@ -516,43 +519,47 @@ export class NextjsSite extends SsrSite {
       return { removedPackages: [], bytesRemoved: 0 };
     }
 
-    const roots = [
-      path.join(sitePath, ".open-next", "server-functions"),
-      path.join(sitePath, ".open-next", "server-function"),
-    ];
+    const serverFunctionsPath = path.join(
+      sitePath,
+      ".open-next",
+      "server-functions"
+    );
+    const serverFunctionPath = path.join(
+      sitePath,
+      ".open-next",
+      "server-function"
+    );
     const removedPackages: string[] = [];
     let bytesRemoved = 0;
+    const bundlePaths = [
+      ...(fs.existsSync(serverFunctionsPath)
+        ? fs
+            .readdirSync(serverFunctionsPath, { withFileTypes: true })
+            .filter((entry) => entry.isDirectory())
+            .map((entry) => path.join(serverFunctionsPath, entry.name))
+        : []),
+      ...(fs.existsSync(serverFunctionPath) ? [serverFunctionPath] : []),
+    ];
 
-    roots.forEach((rootPath) => {
-      if (!fs.existsSync(rootPath)) return;
+    bundlePaths.forEach((bundlePath) => {
+      const pnpmPath = path.join(bundlePath, "node_modules", ".pnpm");
+      if (!fs.existsSync(pnpmPath)) return;
 
-      fs.readdirSync(rootPath, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .forEach((entry) => {
-          const pnpmPath = path.join(
-            rootPath,
-            entry.name,
-            "node_modules",
-            ".pnpm"
-          );
-          if (!fs.existsSync(pnpmPath)) return;
+      fs.readdirSync(pnpmPath, { withFileTypes: true })
+        .filter((pkg) => pkg.isDirectory() || pkg.isSymbolicLink())
+        .forEach((pkg) => {
+          if (
+            !packagesToRemove.some((target) =>
+              this.isPnpmPackageMatch(pkg.name, target)
+            )
+          ) {
+            return;
+          }
 
-          fs.readdirSync(pnpmPath, { withFileTypes: true })
-            .filter((pkg) => pkg.isDirectory() || pkg.isSymbolicLink())
-            .forEach((pkg) => {
-              if (
-                !packagesToRemove.some((target) =>
-                  this.isPnpmPackageMatch(pkg.name, target)
-                )
-              ) {
-                return;
-              }
-
-              const packagePath = path.join(pnpmPath, pkg.name);
-              bytesRemoved += this.getPathSize(packagePath);
-              fs.rmSync(packagePath, { recursive: true, force: true });
-              removedPackages.push(pkg.name);
-            });
+          const packagePath = path.join(pnpmPath, pkg.name);
+          bytesRemoved += this.getPathSize(packagePath);
+          fs.rmSync(packagePath, { recursive: true, force: true });
+          removedPackages.push(pkg.name);
         });
     });
 

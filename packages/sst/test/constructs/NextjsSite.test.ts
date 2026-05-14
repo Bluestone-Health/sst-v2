@@ -29,9 +29,16 @@ const pnpmPath = path.join(
   "node_modules",
   ".pnpm"
 );
+const serverFunctionPnpmPath = path.join(
+  sitePath,
+  ".open-next",
+  "server-function",
+  "node_modules",
+  ".pnpm"
+);
 
-function createPnpmPackageDir(name: string) {
-  const pkgPath = path.join(pnpmPath, name);
+function createPnpmPackageDir(name: string, root = pnpmPath) {
+  const pkgPath = path.join(root, name);
   fs.mkdirSync(pkgPath, { recursive: true });
   fs.writeFileSync(path.join(pkgPath, "marker.txt"), "test");
   return pkgPath;
@@ -39,6 +46,10 @@ function createPnpmPackageDir(name: string) {
 
 function removePnpmPackageDir(name: string) {
   fs.rmSync(path.join(pnpmPath, name), { recursive: true, force: true });
+  fs.rmSync(path.join(serverFunctionPnpmPath, name), {
+    recursive: true,
+    force: true,
+  });
 }
 
 afterEach(() => {
@@ -51,6 +62,8 @@ afterEach(() => {
     "tailwindcss@0.0.0-sst-custom",
     "tailwindcss@0.0.0-sst-hook",
     "sst-hook-keep@1.0.0",
+    "tailwindcss@0.0.0-sst-single",
+    "sst-single-keep@1.0.0",
   ].forEach(removePnpmPackageDir);
 });
 
@@ -204,6 +217,18 @@ test("bundleCleanup: default removes matched packages", async () => {
   expect(fs.existsSync(keptPath)).toBeTruthy();
 });
 
+test("bundleCleanup: default removes matched packages from server-function output", async () => {
+  const removedPkg = "tailwindcss@0.0.0-sst-single";
+  const keptPkg = "sst-single-keep@1.0.0";
+  const removedPath = createPnpmPackageDir(removedPkg, serverFunctionPnpmPath);
+  const keptPath = createPnpmPackageDir(keptPkg, serverFunctionPnpmPath);
+
+  await createSite();
+
+  expect(fs.existsSync(removedPath)).toBeFalsy();
+  expect(fs.existsSync(keptPath)).toBeTruthy();
+});
+
 test("bundleCleanup: false disables cleanup", async () => {
   const pkgName = "tailwindcss@0.0.0-sst-disabled";
   const pkgPath = createPnpmPackageDir(pkgName);
@@ -278,4 +303,14 @@ test("bundleCleanup: no-op when no packages match", async () => {
   expect(hookInput).toBeDefined();
   expect(hookInput?.removedPackages).toEqual([]);
   expect(hookInput?.bytesRemoved).toEqual(0);
+});
+
+test("afterBuild: preserves thrown error details", async () => {
+  await expect(
+    createSite({
+      afterBuild: () => {
+        throw new Error("afterBuild exploded");
+      },
+    })
+  ).rejects.toThrow(/afterBuild exploded/);
 });
