@@ -54,6 +54,7 @@ export interface RDSProps {
     | "postgresql15.12"
     | "postgresql16.1"
     | "postgresql17.4"
+    | "postgresql17.7"
 
   /**
    * Name of a database which is automatically created inside the cluster.
@@ -471,6 +472,10 @@ export class RDS extends Construct implements SSTConstruct {
     } else if (engine === "postgresql17.4") {
       return DatabaseClusterEngine.auroraPostgres({
         version: AuroraPostgresEngineVersion.VER_17_4,
+      });
+    } else if (engine === "postgresql17.7") {
+      return DatabaseClusterEngine.auroraPostgres({
+        version: AuroraPostgresEngineVersion.VER_17_7,
       });
     }
 
