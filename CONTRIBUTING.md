@@ -113,7 +113,8 @@ _Note_: The `dist/package.json` is tracked in git and must be kept in sync with 
 
 1. Merge changes to [`main-bsh](https://github.com/Bluestone-Health/sst-v2/tree/main-bsh), where you can also rebase off the upstream if desired.
 2. Run `cd packages/sst` and then`pnpm run pack` to build the package.
-3. Create a release on the [Bluestone Health fork](https://github.com/Bluestone-Health/sst-v2/releases/new) and upload the package. Match the version number to the upstream version you're pinned to.
+3. Rename the tarball to match BSH versioning: `sst-<upstream-version>.<bsh-increment>.tgz`. For example, if you're mirroring upstream `2.49.6` and this is your x BSH release against it, rename to `sst-2.49.6.x.tgz`. Check the [releases page](https://github.com/Bluestone-Health/sst-v2/releases) for the last increment used.
+4. Create a release on the [Bluestone Health fork](https://github.com/Bluestone-Health/sst-v2/releases/new) and upload the renamed tarball.
 
 ### Docs
 
