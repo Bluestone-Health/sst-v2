@@ -117,6 +117,37 @@ export interface NextjsSiteProps extends Omit<SsrSiteProps, "nodejs"> {
    */
   openNextVersion?: string;
   /**
+   * Remove matched package folders from OpenNext server-function bundles.
+   * This is useful for pruning build-time dependencies that can be traced in
+   * monorepo setups.
+   *
+   * Set this to `false` to disable cleanup.
+   *
+   * @default [
+   *  "typescript",
+   *  "@esbuild",
+   *  "esbuild",
+   *  "webpack",
+   *  "webpack-sources",
+   *  "terser",
+   *  "terser-webpack-plugin",
+   *  "@babel",
+   *  "tailwindcss",
+   *  "@tailwindcss",
+   * ]
+   */
+  bundleCleanup?: string[] | false;
+  /**
+   * Runs after OpenNext build and bundle cleanup, before CDK assets are created.
+   * This can be used to customize `.open-next` output.
+   */
+  afterBuild?: (input: {
+    sitePath: string;
+    openNextPath: string;
+    removedPackages: string[];
+    bytesRemoved: number;
+  }) => void;
+  /**
    * The server function is deployed to Lambda in a single region. Alternatively, you can enable this option to deploy to Lambda@Edge.
    * @default false
    */
@@ -178,7 +209,19 @@ export interface NextjsSiteProps extends Omit<SsrSiteProps, "nodejs"> {
   };
 }
 
-const DEFAULT_OPEN_NEXT_VERSION = "3.5.5";
+const DEFAULT_OPEN_NEXT_VERSION = "3.10.2";
+const DEFAULT_BUNDLE_CLEANUP_PACKAGES = [
+  "typescript",
+  "@esbuild",
+  "esbuild",
+  "webpack",
+  "webpack-sources",
+  "terser",
+  "terser-webpack-plugin",
+  "@babel",
+  "tailwindcss",
+  "@tailwindcss",
+];
 
 type NextjsSiteNormalizedProps = NextjsSiteProps & SsrSiteNormalizedProps;
 
@@ -324,6 +367,7 @@ export class NextjsSite extends SsrSite {
   protected plan(bucket: Bucket) {
     const { path: sitePath } = this.props;
     const imageOptimization = this.props.imageOptimization;
+    this.runAfterBuildHooks();
 
     const openNextOutputPath = path.join(
       sitePath ?? ".",
@@ -431,6 +475,133 @@ export class NextjsSite extends SsrSite {
         allowedHeaders: ["x-open-next-cache-key"],
       },
     });
+  }
+
+  private runAfterBuildHooks() {
+    const { path: sitePath, afterBuild, bundleCleanup } = this.props;
+    const openNextPath = path.join(sitePath, ".open-next");
+    const packagesToRemove =
+      bundleCleanup === false
+        ? []
+        : Array.isArray(bundleCleanup)
+        ? bundleCleanup
+        : DEFAULT_BUNDLE_CLEANUP_PACKAGES;
+
+    const { removedPackages, bytesRemoved } = this.cleanupServerFunctionBundles(
+      sitePath,
+      packagesToRemove
+    );
+
+    if (!afterBuild) return;
+
+    try {
+      afterBuild({
+        sitePath,
+        openNextPath,
+        removedPackages,
+        bytesRemoved,
+      });
+    } catch (error) {
+      const errorDetails =
+        error instanceof Error ? error.stack ?? error.message : String(error);
+      throw new VisibleError(
+        `There was a problem running "afterBuild" for the "${this.id}" site.`,
+        errorDetails
+      );
+    }
+  }
+
+  private cleanupServerFunctionBundles(
+    sitePath: string,
+    packagesToRemove: string[]
+  ) {
+    if (!packagesToRemove.length) {
+      return { removedPackages: [], bytesRemoved: 0 };
+    }
+
+    const serverFunctionsPath = path.join(
+      sitePath,
+      ".open-next",
+      "server-functions"
+    );
+    const serverFunctionPath = path.join(
+      sitePath,
+      ".open-next",
+      "server-function"
+    );
+    const removedPackages: string[] = [];
+    let bytesRemoved = 0;
+    const bundlePaths = [
+      ...(fs.existsSync(serverFunctionsPath)
+        ? fs
+            .readdirSync(serverFunctionsPath, { withFileTypes: true })
+            .filter((entry) => entry.isDirectory())
+            .map((entry) => path.join(serverFunctionsPath, entry.name))
+        : []),
+      ...(fs.existsSync(serverFunctionPath) ? [serverFunctionPath] : []),
+    ];
+
+    bundlePaths.forEach((bundlePath) => {
+      const pnpmPath = path.join(bundlePath, "node_modules", ".pnpm");
+      if (!fs.existsSync(pnpmPath)) return;
+
+      fs.readdirSync(pnpmPath, { withFileTypes: true })
+        .filter((pkg) => pkg.isDirectory() || pkg.isSymbolicLink())
+        .forEach((pkg) => {
+          if (
+            !packagesToRemove.some((target) =>
+              this.isPnpmPackageMatch(pkg.name, target)
+            )
+          ) {
+            return;
+          }
+
+          const packagePath = path.join(pnpmPath, pkg.name);
+          bytesRemoved += this.getPathSize(packagePath);
+          fs.rmSync(packagePath, { recursive: true, force: true });
+          removedPackages.push(pkg.name);
+        });
+    });
+
+    if (removedPackages.length) {
+      Logger.debug("NextjsSite bundle cleanup completed", {
+        constructId: this.id,
+        removedPackagesCount: removedPackages.length,
+        bytesRemoved,
+      });
+    }
+
+    return { removedPackages, bytesRemoved };
+  }
+
+  private isPnpmPackageMatch(dirName: string, targetPackage: string) {
+    if (targetPackage.startsWith("@")) {
+      const scopedName = targetPackage.includes("/")
+        ? targetPackage.replace("/", "+")
+        : targetPackage;
+      return (
+        dirName.startsWith(`${scopedName}@`) ||
+        dirName.startsWith(`${scopedName}+`)
+      );
+    }
+    return dirName.startsWith(`${targetPackage}@`);
+  }
+
+  private getPathSize(pathname: string): number {
+    try {
+      const stats = fs.lstatSync(pathname);
+      if (stats.isSymbolicLink()) return 0;
+      if (stats.isFile()) return stats.size;
+      if (!stats.isDirectory()) return 0;
+      return fs
+        .readdirSync(pathname)
+        .reduce(
+          (sum, child) => sum + this.getPathSize(path.join(pathname, child)),
+          0
+        );
+    } catch {
+      return 0;
+    }
   }
 
   private setMiddlewareEnv() {
