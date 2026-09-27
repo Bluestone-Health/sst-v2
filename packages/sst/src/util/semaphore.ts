@@ -22,7 +22,7 @@ export class Semaphore {
         this.locked++;
         resolve(unlock);
       } else {
-        this.queue.push(unlock);
+        this.queue.push(resolve);
       }
     });
   }

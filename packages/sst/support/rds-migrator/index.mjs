@@ -91,7 +91,7 @@ export async function handler(evt) {
   }
 }
 
-class DynamicFileMigrationProvider {
+export class DynamicFileMigrationProvider {
   #migrationFolderPath;
 
   constructor(migrationFolderPath) {
@@ -125,10 +125,9 @@ class DynamicFileMigrationProvider {
           await fs.copyFile(fullPath, copy);
           const migration = await import(url.pathToFileURL(copy).href);
           migrations[name] = migration;
-        } catch (ex) {
-          console.error(ex);
+        } finally {
+          await fs.rm(copy, { force: true });
         }
-        await fs.rm(copy);
       }
     }
 

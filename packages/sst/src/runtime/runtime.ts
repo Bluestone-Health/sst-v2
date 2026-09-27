@@ -7,6 +7,7 @@ declare module "../bus.js" {
       functionID: string;
     };
     "function.invoked": {
+      signal?: AbortSignal;
       workerID: string;
       functionID: string;
       requestID: string;

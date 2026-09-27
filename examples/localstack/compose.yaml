@@ -1,0 +1,21 @@
+services:
+  localstack:
+    image: localstack/localstack-pro@sha256:03bde1974f8bb7a7b6d4128228cf9048c7bdb8249deb998d1b80af73926c0017
+    ports:
+      - "127.0.0.1:${LOCALSTACK_PORT:-4567}:4566"
+    environment:
+      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:?Set the authorized LocalStack trial/license token}
+      DISABLE_EVENTS: "1"
+      SKIP_SSL_CERT_DOWNLOAD: "1"
+      # Snapshot save/restore stalls RDS Data API on the tested image.
+      PERSISTENCE: "0"
+      S3_SKIP_SIGNATURE_VALIDATION: "0"
+      SQS_ENDPOINT_STRATEGY: dynamic
+      MAIN_CONTAINER_NAME: ${COMPOSE_PROJECT_NAME:?Choose a unique Compose project}-localstack-1
+      LAMBDA_DOCKER_NETWORK: ${COMPOSE_PROJECT_NAME}_default
+      LAMBDA_DOCKER_FLAGS: "--add-host=host.docker.internal:host-gateway"
+    volumes:
+      - data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+volumes:
+  data:

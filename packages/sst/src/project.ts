@@ -10,6 +10,7 @@ import { blue } from "colorette";
 import dotenv from "dotenv";
 import type { App } from "./constructs/App.js";
 import { load } from "./stacks/build.js";
+import { useLocal } from "./local.js";
 
 export interface SSTConfig {
   config: (globals: GlobalOptions) => Promise<ConfigOptions> | ConfigOptions;
@@ -109,9 +110,11 @@ export async function initProject(globals: GlobalOptions) {
 
   // Logger.debug("initing project");
   const root = globals.root || (await findRoot());
-  const out = path.join(root, ".sst");
+  const local = useLocal();
+  const out = local ? path.join(root, ".sst", "local", local.id) : path.join(root, ".sst");
   await fs.mkdir(out, {
     recursive: true,
+    ...(local ? { mode: 0o700 } : {}),
   });
   // Logger.debug("made out dir");
 
@@ -134,7 +137,7 @@ export async function initProject(globals: GlobalOptions) {
   })();
 
   const config = await Promise.resolve(sstConfig.config(globals));
-  const stage =
+  const stage = local ? `local-${local.id}` :
     globals.stage ||
     config.stage ||
     process.env.SST_STAGE ||
@@ -171,12 +174,12 @@ export async function initProject(globals: GlobalOptions) {
     config: {
       ...config,
       stage,
-      profile:
+      profile: local ? undefined :
         process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
           ? undefined
           : globals.profile || config.profile,
-      region: globals.region || config.region,
-      role: globals.role || config.role,
+      region: globals.region || config.region || (local ? "us-east-1" : undefined),
+      role: local ? undefined : globals.role || config.role,
       ssmPrefix: config.ssmPrefix || `/sst/${config.name}/${stage}/`,
       bootstrap: config.bootstrap,
       cdk: config.cdk,

@@ -38,6 +38,10 @@ import { Api } from "sst/constructs";
 
 For more details, [head over to our docs](https://docs.sst.dev).
 
+## LocalStack development (this fork)
+
+The experimental `sst local` command runs Node.js handlers from your checkout with Docker-hosted S3, SQS, and PostgreSQL/Data API. Follow the [local example walkthrough](../../examples/localstack/README.md) to build and link this fork, configure LocalStack, and test it. Ordinary AWS commands remain unchanged; local mode requires a LocalStack entitlement, and Docker restarts require a reset.
+
 ---
 
 **Join our community** [Discord](https://sst.dev/discord) | [YouTube](https://www.youtube.com/c/sst-dev) | [Twitter](https://twitter.com/SST_dev)

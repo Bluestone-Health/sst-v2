@@ -33,8 +33,21 @@ export const program = yargs(hideBin(process.argv))
       process.env.SST_VERBOSE = "1";
     }
     if (argv._.length > 0) {
+      if (argv._[0] === "local") {
+        const { configureLocal } = await import("../local.js");
+        configureLocal({
+          id: String(argv.env),
+          endpoint: String(argv.endpoint),
+          port: Number(argv.port),
+        });
+      }
       const { initProject } = await import("../project.js");
       await initProject(argv);
+      // Project .env files must not restore cloud credentials or endpoint overrides.
+      if (argv._[0] === "local") {
+        const { configureLocal, useLocal } = await import("../local.js");
+        configureLocal(useLocal()!);
+      }
       const { trackCli } = await import("./telemetry/telemetry.js");
       trackCli(argv._[0] as string);
     }
