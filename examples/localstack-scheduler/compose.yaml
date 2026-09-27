@@ -1,0 +1,8 @@
+# Overlay on ../localstack/compose.yaml. CodeBuild requires a host bind mount.
+services:
+  localstack:
+    environment:
+      CODEBUILD_ENABLE_CUSTOM_IMAGES: "1"
+      CODEBUILD_DOCKER_FLAGS: "--add-host=host.docker.internal:host-gateway"
+    volumes:
+      - ${LOCALSTACK_DATA_DIR:?Set an absolute local data directory}:/var/lib/localstack

@@ -71,13 +71,64 @@ pnpm test test/local.test.ts test/asset-schema.test.ts
 
 ## Supported scope and limits
 
-- Node.js/TypeScript only. Workers run the host Node version: use Node 22 for this example. Python, containers, `enableLiveDev: false`, FIFO queues, non-SQS event sources, cloud context lookups, and services outside the local resource allowlist fail explicitly. Cross-stack/imported SQS event-source mappings are not supported initially.
+- Node.js/TypeScript only. Workers run the host Node version: use Node 22 for this example. Python handlers, container Lambdas, non-SQS event-source mappings, cloud context lookups, and services outside the local resource allowlist fail explicitly. The [Scheduler resource example](../localstack-scheduler/README.md) covers FIFO/cross-stack SQS, HTTP APIs, DynamoDB, SNS, packaged Node Scripts, Jobs, and site bindings. Imported SQS sources must resolve to a queue in the same assembly.
 - Standard SQS batching and `ReportBatchItemFailures` are preserved. Errors, worker crashes, disconnects, and timeouts return Lambda failures for LocalStack to retry. This does not claim AWS production timing or complete FIFO/IAM/API Gateway parity.
 - Application SDK v3 clients use `AWS_ENDPOINT_URL`; SDK v2 clients must receive the endpoint explicitly. SQS clients should use `useQueueUrlAsEndpoint: false`, because CloudFormation may return its internal port in queue URLs. SST rewrites bound queue URLs for host workers. Do not hard-code real AWS endpoints in local handlers.
 - The bridge listens on the host for Docker access and requires a random per-environment bearer token. The unauthenticated Lambda Runtime API and web UI are loopback-only. Keep `.sst/local` private: it contains tokens, synthesized templates, logs, and local database credentials. One process owns each environment via a PID lock.
 - Compose sets Docker's `host.docker.internal:host-gateway` route and a per-project Lambda network. This route is verified on macOS/OrbStack. The Linux host-gateway configuration is supplied but has not been run on Linux or Docker Desktop in this test.
 - Raw CDK helper Lambdas execute in LocalStack containers; SST functions, including the existing RDSv2 migration handler, execute on the host. No SST IoT bridge or SST cloud bootstrap is used. The embedded CDK toolkit's bootstrap/assets, S3-notification callback, and migration callback are exercised locally.
 - Ordinary commands retain AWS defaults. The separately committed schema-reader alignment fixes the existing CDK 53/publisher 44 mismatch; revert that commit independently if needed. No deployment-mode toggle or toolkit upgrade was added.
+
+## VSCode launch configuration
+
+The `.vscode/launch.json` file includes configurations for debugging LocalStack Lambda workers and launching the LocalStack server. Use the compound configuration "LocalStack: app + Lambda debugging" to start both concurrently.
+
+```json
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "LocalStack: Lambda workers",
+      "runtimeExecutable": "${env:HOME}/.local/share/fnm/node-versions/v22.23.0/installation/bin/node",
+      "program": "${workspaceFolder}/packages/sst/dist/cli/sst.js",
+      "cwd": "${workspaceFolder}/examples/localstack",
+      "args": ["local", "--env", "a", "--endpoint", "http://127.0.0.1:4567", "--port", "13559"],
+      "env": { "MARKER": "alpha" },
+      "console": "integratedTerminal",
+      "autoAttachChildProcesses": true,
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/examples/localstack/.sst/local/a/artifacts/**/*.mjs", "${workspaceFolder}/examples/localstack/.sst/local/a/artifacts/**/*.js"],
+      "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+      "skipFiles": ["<node_internals>/**"],
+      "preLaunchTask": "localstack: build SST"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Launch Localstack Config",
+      "runtimeExecutable": "${env:HOME}/.local/share/fnm/node-versions/v22.23.0/installation/bin/node",
+      "cwd": "${workspaceFolder}/examples/localstack",
+      "skipFiles": ["<node_internals>/**"],
+      "program": "${workspaceFolder}/examples/localstack/server.mjs",
+      "console": "integratedTerminal",
+      "args": ["a", "http://127.0.0.1:4567", "3001"]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "LocalStack: app + Lambda debugging",
+      "configurations": ["LocalStack: Lambda workers", "Launch Localstack Config"],
+      "stopAll": true
+    }
+  ]
+}
+
+```
 
 ## Verification evidence
 

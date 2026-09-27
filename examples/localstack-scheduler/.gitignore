@@ -1,0 +1,6 @@
+.sst/
+.sst.config.*
+node_modules/
+.env*
+!secrets.example.env
+site/sst-env.d.ts

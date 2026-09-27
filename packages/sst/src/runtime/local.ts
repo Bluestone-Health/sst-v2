@@ -6,7 +6,7 @@ import { useFunctions } from "../constructs/Function.js";
 import { useFunctionBuilder, useRuntimeHandlers } from "./handlers.js";
 import { startRuntimeServer } from "./server.js";
 import type {} from "./runtime.js";
-import { useLocal } from "../local.js";
+import { useLocal, localEnvironment } from "../local.js";
 
 const invocation = z.object({
   functionID: z.string().min(1),
@@ -60,11 +60,9 @@ export async function startLocalBridge(options: {
     const input = parsed.data;
     const props = useFunctions().fromID(input.functionID);
     if (!props?.runtime?.startsWith("nodejs")) {
-      res
-        .status(400)
-        .json({
-          errorMessage: "Local mode requires a registered Node.js function",
-        });
+      res.status(400).json({
+        errorMessage: "Local mode requires a registered Node.js function",
+      });
       return;
     }
     const workerID = randomUUID();
@@ -126,26 +124,10 @@ export async function startLocalBridge(options: {
         return;
       }
       // ponytail: a fresh worker per request isolates env/global state; pool only if measurements justify it.
-      const { SST_LOCAL_BRIDGE_TOKEN: _token, ...env } = input.env;
-      if (useLocal()) {
-        for (const key of Object.keys(env)) {
-          if (
-            key.startsWith("AWS_ENDPOINT_URL") ||
-            key === "AWS_SESSION_TOKEN" ||
-            key === "AWS_PROFILE"
-          )
-            delete env[key];
-          // CloudFormation creates queues through LocalStack's internal port.
-          if (key.startsWith("SST_Queue_queueUrl_"))
-            env[key] = useLocal()!.endpoint + new URL(env[key]).pathname;
-        }
-        Object.assign(env, {
-          AWS_ENDPOINT_URL: useLocal()!.endpoint,
-          AWS_ACCESS_KEY_ID: "test",
-          AWS_SECRET_ACCESS_KEY: "test",
-          AWS_EC2_METADATA_DISABLED: "true",
-        });
-      }
+      const { SST_LOCAL_BRIDGE_TOKEN: _token, ...suppliedEnv } = input.env;
+      const env = useLocal()
+        ? (localEnvironment(suppliedEnv) as Record<string, string>)
+        : suppliedEnv;
       bus.publish("function.invoked", {
         ...input,
         signal: controller.signal,
