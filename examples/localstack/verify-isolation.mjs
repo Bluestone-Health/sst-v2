@@ -110,7 +110,16 @@ async function startSST(e) {
       () => false
     );
   }, `${e.id} SST ready`);
-  console.log(JSON.stringify({ env: e.id, startupMs: Date.now() - started }));
+  console.log(
+    JSON.stringify({
+      env: e.id,
+      startupMs: Date.now() - started,
+      ...(e.dockerStarted
+        ? { containerToReadyMs: Date.now() - e.dockerStarted }
+        : {}),
+    })
+  );
+  e.dockerStarted = undefined;
 }
 async function invoke(e, event) {
   const response = await fetch(`http://127.0.0.1:${e.web}/invoke`, {
@@ -129,6 +138,7 @@ const versionFile = path.join(a.root, "src/version.ts");
 const original = await readFile(versionFile, "utf8");
 try {
   for (const e of environments) {
+    e.dockerStarted = Date.now();
     await run("docker", ["compose", "up", "-d"], e.root, e.env);
     await waitFor(
       () =>
