@@ -1,3 +1,4 @@
+import { useLocal } from "../local.js";
 import { Construct } from "constructs";
 import {
   Role,
@@ -786,6 +787,12 @@ export class Api<
    * The AWS generated URL of the Api.
    */
   public get url(): string {
+    if (useLocal())
+      return `http://${
+        this.cdk.httpApi.apiId
+      }.execute-api.localhost.localstack.cloud:${
+        new URL(useLocal()!.endpoint).port || "80"
+      }`;
     const app = this.node.root as App;
     return this.cdk.httpApi instanceof HttpApi
       ? this.cdk.httpApi.apiEndpoint
@@ -802,7 +809,9 @@ export class Api<
    * :::
    */
   public get customDomainUrl(): string | undefined {
-    return this._customDomainUrl;
+    return useLocal() && this._customDomainUrl
+      ? this.url
+      : this._customDomainUrl;
   }
 
   /**
@@ -968,7 +977,7 @@ export class Api<
         graphql: false,
         url: this.cdk.httpApi.url,
         httpApiId: this.cdk.httpApi.apiId,
-        customDomainUrl: this._customDomainUrl,
+        customDomainUrl: this.customDomainUrl,
         routes: Object.entries(this.routesData).map(([key, data]) => {
           if (data.type === "function")
             return {

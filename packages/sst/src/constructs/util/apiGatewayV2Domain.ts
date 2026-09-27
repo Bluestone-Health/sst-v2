@@ -1,3 +1,4 @@
+import { useLocal } from "../../local.js";
 import { Construct } from "constructs";
 import { Token } from "aws-cdk-lib/core";
 import { DomainName, IDomainName } from "aws-cdk-lib/aws-apigatewayv2";
@@ -56,8 +57,27 @@ export function buildCustomDomainData(
   if (customDomain === undefined) {
     return;
   }
+  // Retain the domain construct for callers, without public DNS lookups/records.
+  if (useLocal()) {
+    const name =
+      typeof customDomain === "string" ? customDomain : customDomain.domainName;
+    if (!name)
+      throw new Error(
+        "Local API custom domains require an explicit domainName"
+      );
+    const certificate = new acm.Certificate(scope, "LocalCertificate", {
+      domainName: name,
+    });
+    return {
+      apigDomain: createApigDomain(scope, name, certificate),
+      certificate,
+      isApigDomainCreated: true,
+      isCertificatedCreated: true,
+      url: name,
+    };
+  }
   // customDomain is a string
-  else if (typeof customDomain === "string") {
+  if (typeof customDomain === "string") {
     return buildDataForStringInput(scope, customDomain);
   }
   // customDomain.domainName is a string

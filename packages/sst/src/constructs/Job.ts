@@ -1,3 +1,4 @@
+import { useLocal } from "../local.js";
 import url from "url";
 import path from "path";
 import fs from "fs/promises";
@@ -384,7 +385,9 @@ export class Job extends Construct implements SSTConstruct {
     this.id = id;
     this.props = props;
     const isLiveDevEnabled =
-      app.mode === "dev" && (this.props.enableLiveDev === false ? false : true);
+      !useLocal() &&
+      app.mode === "dev" &&
+      (this.props.enableLiveDev === false ? false : true);
 
     this.validateContainerProps();
     this.validateMemoryProps();
@@ -412,6 +415,21 @@ export class Job extends Construct implements SSTConstruct {
       runtime: this.convertJobRuntimeToFunctionRuntime(),
     });
 
+    if (useLocal()) {
+      const endpoint = `http://host.docker.internal:${
+        new URL(useLocal()!.endpoint).port || "80"
+      }`;
+      for (const [key, value] of Object.entries({
+        AWS_ENDPOINT_URL: endpoint,
+        AWS_ACCESS_KEY_ID: "test",
+        AWS_SECRET_ACCESS_KEY: "test",
+        AWS_EC2_METADATA_DISABLED: "true",
+      })) {
+        this.addEnvironment(key, value);
+        if (key !== "AWS_ACCESS_KEY_ID" && key !== "AWS_SECRET_ACCESS_KEY")
+          this._jobManager.addEnvironment(key, value);
+      }
+    }
     app.registerTypes(this);
   }
 

@@ -62,6 +62,52 @@ export const bind = (program: Program) =>
           import("../../constructs/util/binding.js"),
         ]);
 
+        const { useLocal, localEnvironment } = await import("../../local.js");
+        if (useLocal()) {
+          const { Config } = await import("../../config.js");
+          const fs = await import("fs/promises");
+          const project = useProject();
+          const sites = JSON.parse(
+            await fs
+              .readFile(path.join(project.paths.out, "sites.json"), "utf8")
+              .catch((e) => {
+                if (e.code !== "ENOENT") throw e;
+                return "{}";
+              })
+          );
+          let siteEnv = {};
+          if (sites[process.cwd()]) {
+            const { LambdaClient, GetFunctionConfigurationCommand } =
+              await import("@aws-sdk/client-lambda");
+            const { useAWSClient } = await import("../../credentials.js");
+            siteEnv =
+              (
+                await useAWSClient(LambdaClient).send(
+                  new GetFunctionConfigurationCommand({
+                    FunctionName: sites[process.cwd()],
+                  })
+                )
+              ).Environment?.Variables || {};
+          }
+          if (!args.command?.length)
+            throw new VisibleError("A command is required");
+          const child = spawn(args.command.join(" "), {
+            shell: true,
+            stdio: "inherit",
+            env: localEnvironment({
+              ...process.env,
+              ...(await Config.env()),
+              ...siteEnv,
+              SST_REGION: project.config.region,
+              AWS_REGION: project.config.region,
+              SST_SSM_PREFIX: project.config.ssmPrefix,
+            }),
+          });
+          child.once("error", exitWithError);
+          child.once("exit", (code) => void exit(code ?? 1));
+          return;
+        }
+
         try {
           // Handle deprecated "env" command
           if (args._[0] === "env") {

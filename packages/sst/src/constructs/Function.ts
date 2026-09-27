@@ -908,8 +908,8 @@ export class Function extends CDKFunction implements SSTConstruct {
       ];
     const isLiveDevEnabled =
       app.mode === "dev" && (props.enableLiveDev === false ? false : true);
-    if (useLocal() && (!props.runtime.startsWith("nodejs") || !isLiveDevEnabled))
-      throw new Error(`Local mode requires Node.js with live development enabled: ${id}`);
+    if (useLocal() && !props.runtime.startsWith("nodejs"))
+      throw new Error(`Local mode requires Node.js: ${id}`);
 
     Function.validateHandlerSet(id, props);
     Function.validateVpcSettings(id, props);
@@ -1162,6 +1162,9 @@ export class Function extends CDKFunction implements SSTConstruct {
     }
 
     this.attachPermissions(props.permissions || []);
+
+    if (useLocal() && !isLiveDevEnabled)
+      this.addEnvironment("AWS_ENDPOINT_URL", `http://host.docker.internal:${new URL(useLocal()!.endpoint).port || "80"}`);
 
     // Add config
     this.addEnvironment("SST_APP", app.name, { removeInEdge: true });

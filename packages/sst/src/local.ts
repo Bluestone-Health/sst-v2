@@ -35,7 +35,16 @@ export function configureLocal(options: LocalOptions) {
       "Choose a local bridge port between 1024 and 65535."
     );
   local = { ...options, endpoint: endpoint.origin };
-  for (const key of Object.keys(process.env)) {
+  const env = localEnvironment(process.env);
+  for (const key of Object.keys(process.env))
+    if (!(key in env)) delete process.env[key];
+  Object.assign(process.env, env);
+}
+
+/** Route host workers and bound commands to the same local environment. */
+export function localEnvironment(input: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const env = { ...input };
+  for (const key of Object.keys(env)) {
     if (
       key.startsWith("AWS_ENDPOINT_URL") ||
       [
@@ -46,19 +55,22 @@ export function configureLocal(options: LocalOptions) {
         "AWS_WEB_IDENTITY_TOKEN_FILE",
         "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
         "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+        "SST_LOCAL_BRIDGE_TOKEN",
       ].includes(key)
     )
-      delete process.env[key];
+      delete env[key];
+    if (key.startsWith("SST_Queue_queueUrl_") && env[key])
+      env[key] = useLocal()!.endpoint + new URL(env[key]!).pathname;
   }
-  Object.assign(process.env, {
+  return Object.assign(env, {
+    SST_TELEMETRY_DISABLED: "1",
+    AWS_ENDPOINT_URL: useLocal()!.endpoint,
+    AWS_ENDPOINT_URL_S3: `http://s3.localhost.localstack.cloud:${
+      new URL(useLocal()!.endpoint).port || "80"
+    }`,
     AWS_ACCESS_KEY_ID: "test",
     AWS_SECRET_ACCESS_KEY: "test",
     AWS_EC2_METADATA_DISABLED: "true",
     AWS_IGNORE_CONFIGURED_ENDPOINT_URLS: "false",
-    AWS_ENDPOINT_URL: endpoint.origin,
-    AWS_ENDPOINT_URL_S3: `http://s3.localhost.localstack.cloud:${
-      endpoint.port || "80"
-    }`,
-    SST_TELEMETRY_DISABLED: "1",
   });
 }
