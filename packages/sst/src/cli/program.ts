@@ -3,6 +3,13 @@ import { hideBin } from "yargs/helpers";
 
 export const program = yargs(hideBin(process.argv))
   .scriptName("sst")
+  .option("local", {
+    type: "boolean",
+    describe: "Use LocalStack for bind or secrets",
+  })
+  .option("env", { type: "string", describe: "Local environment ID" })
+  .option("endpoint", { type: "string", describe: "LocalStack endpoint" })
+  .option("port", { type: "number", describe: "Local bridge port" })
   .option("stage", {
     type: "string",
     describe: "The stage to use, defaults to personal stage",
@@ -33,18 +40,27 @@ export const program = yargs(hideBin(process.argv))
       process.env.SST_VERBOSE = "1";
     }
     if (argv._.length > 0) {
-      if (argv._[0] === "local") {
+      if (argv._[0] === "local" || argv.local) {
+        if (
+          argv.local &&
+          !["bind", "env", "secrets", "local"].includes(String(argv._[0]))
+        )
+          throw new Error(
+            "--local is supported only by bind and secrets; use sst local to deploy locally."
+          );
+        if (!argv.env || !argv.endpoint)
+          throw new Error("Local commands require --env and --endpoint.");
         const { configureLocal } = await import("../local.js");
         configureLocal({
           id: String(argv.env),
           endpoint: String(argv.endpoint),
-          port: Number(argv.port),
+          port: Number(argv.port ?? 13557),
         });
       }
       const { initProject } = await import("../project.js");
       await initProject(argv);
       // Project .env files must not restore cloud credentials or endpoint overrides.
-      if (argv._[0] === "local") {
+      if (argv._[0] === "local" || argv.local) {
         const { configureLocal, useLocal } = await import("../local.js");
         configureLocal(useLocal()!);
       }

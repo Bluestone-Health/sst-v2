@@ -1,3 +1,4 @@
+import { useLocal } from "./local.js";
 import {
   DeleteParameterCommand,
   GetParameterCommand,
@@ -162,6 +163,7 @@ export namespace Config {
     }
 
     // Publish event
+    if (useLocal()) return;
     const iot = await useIOT();
     const topic = `${iot.prefix}/events`;
     await iot.publish(topic, "config.secret.updated", { name: input.key });
@@ -194,6 +196,16 @@ export namespace Config {
   }
 
   export async function restart(keys: string[]) {
+    // Local invocations use fresh workers; restart bound commands to reload secrets.
+    if (useLocal())
+      return {
+        edgeSites: [],
+        sites: [],
+        placeholderSites: [],
+        functions: [],
+        sitesWithPrefetch: [],
+        functionsWithPrefetch: [],
+      };
     // Note: Currently functions and sites with prefetch secrets are not restarted
     const metadata = await Stacks.metadata();
     const siteData = Object.values(metadata)

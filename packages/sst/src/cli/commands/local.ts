@@ -34,6 +34,9 @@ export const local = (program: Program) =>
         "@aws-sdk/client-lambda"
       );
       const { CfnOutput, Stack } = await import("aws-cdk-lib");
+      const { Function } = await import("../../constructs/Function.js");
+      const { SsrSite } = await import("../../constructs/SsrSite.js");
+      const sites: Record<string, string> = {};
       const { RDSv2 } = await import("../../constructs/RDSv2.js");
       const { randomBytes } = await import("crypto");
       const fs = await import("fs/promises");
@@ -105,6 +108,23 @@ export const local = (program: Program) =>
           fn: async (app) => {
             await config.stacks(app);
             for (const resource of app.node.findAll()) {
+              if (resource instanceof Function)
+                new CfnOutput(
+                  Stack.of(resource),
+                  `LocalFunction${resource.node.addr}`,
+                  { value: resource.functionName }
+                );
+              if (resource instanceof SsrSite) {
+                const metadata = resource.getConstructMetadata().data as {
+                  path: string;
+                  server: string;
+                };
+                const key = `LocalSite${resource.node.addr}`;
+                sites[path.resolve(project.paths.root, metadata.path)] = key;
+                new CfnOutput(Stack.of(resource), key, {
+                  value: metadata.server,
+                });
+              }
               if (resource instanceof RDSv2 && resource.migratorFunction)
                 new CfnOutput(
                   Stack.of(resource),
@@ -114,64 +134,10 @@ export const local = (program: Program) =>
             }
           },
         });
-        // Only the example's resources and their CDK support resources are supported.
-        const supported = new Set([
-          "AWS::S3::Bucket",
-          "AWS::S3::BucketPolicy",
-          "AWS::SQS::Queue",
-          "AWS::SQS::QueuePolicy",
-          "AWS::RDS::DBCluster",
-          "AWS::RDS::DBInstance",
-          "AWS::RDS::DBSubnetGroup",
-          "AWS::SecretsManager::Secret",
-          "AWS::SecretsManager::SecretTargetAttachment",
-          "AWS::EC2::VPC",
-          "AWS::EC2::Subnet",
-          "AWS::EC2::RouteTable",
-          "AWS::EC2::Route",
-          "AWS::EC2::SubnetRouteTableAssociation",
-          "AWS::EC2::InternetGateway",
-          "AWS::EC2::VPCGatewayAttachment",
-          "AWS::EC2::SecurityGroup",
-          "AWS::IAM::Role",
-          "AWS::IAM::Policy",
-          "AWS::SSM::Parameter",
-          "AWS::Logs::LogGroup",
-          "AWS::Lambda::Function",
-          "AWS::Lambda::Permission",
-          "AWS::Lambda::EventSourceMapping",
-          "AWS::Lambda::EventInvokeConfig",
-          "Custom::S3BucketNotifications",
-          "Custom::SSTScript",
-        ]);
-        for (const stack of assembly.stacks) {
-          for (const [id, resource] of Object.entries(
-            stack.template.Resources || {}
-          ) as [string, any][]) {
-            if (!supported.has(resource.Type))
-              throw new Error(
-                `Local mode does not support ${resource.Type} (${id}). Use a regular SST stage.`
-              );
-            if (
-              resource.Type === "AWS::SQS::Queue" &&
-              resource.Properties?.FifoQueue
-            )
-              throw new Error(
-                "Local mode currently supports standard SQS queues only."
-              );
-            if (resource.Type === "AWS::Lambda::EventSourceMapping") {
-              const source = resource.Properties.EventSourceArn?.["Fn::GetAtt"];
-              if (
-                !Array.isArray(source) ||
-                source[1] !== "Arn" ||
-                stack.template.Resources[source[0]]?.Type !== "AWS::SQS::Queue"
-              )
-                throw new Error(
-                  "Local mode only supports SQS event sources defined in the same stack."
-                );
-            }
-          }
-        }
+        const { validateLocalAssembly } = await import(
+          "../../local-resources.js"
+        );
+        validateLocalAssembly(assembly.stacks);
 
         console.log(`[${local.id}] Bootstrapping local CDK resources`);
         const toolkit = path.dirname(
@@ -223,6 +189,14 @@ export const local = (program: Program) =>
               `Local database migration failed. Check RDS/Data API capability and migration logs: ${payload}`
             );
         }
+        await fs.writeFile(
+          path.join(project.paths.out, "sites.json"),
+          JSON.stringify(
+            Object.fromEntries(
+              Object.entries(sites).map(([dir, key]) => [dir, outputs[key]])
+            )
+          )
+        );
         await fs.writeFile(
           path.join(project.paths.out, "outputs.json"),
           JSON.stringify(outputs, null, 2)

@@ -1,3 +1,4 @@
+import { useLocal } from "../local.js";
 import { Construct } from 'constructs';
 import { CfnSchedule } from 'aws-cdk-lib/aws-scheduler';
 import { Role, ServicePrincipal, PolicyStatement } from 'aws-cdk-lib/aws-iam';
@@ -82,7 +83,7 @@ export class Schedule extends Construct implements SSTConstruct {
       scheduleExpression: props.schedule,
       scheduleExpressionTimezone: props.timezone,
       target,
-      state: props.enabled === false ? 'DISABLED' : 'ENABLED',
+      state: useLocal() || props.enabled === false ? 'DISABLED' : 'ENABLED',
       description: props.description,
     });
 
