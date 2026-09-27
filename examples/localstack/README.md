@@ -7,7 +7,7 @@ Experimental, opt-in `sst local` for Node.js handlers, S3, standard SQS, and Pos
 - Node **22**, pnpm 10, and Docker with its socket available.
 - A LocalStack entitlement covering RDS/Data API and your intended use. Verification uses an Ultimate trial. Supply `LOCALSTACK_AUTH_TOKEN` through your shell's environment; never put it in this repository. No AWS profile or real AWS credentials are needed.
 - Free ports 4567 (LocalStack), 13559 (authenticated bridge), and 3001 (loopback web UI). Every concurrent checkout needs different ports, environment ID, and Compose project.
-- About several GB of Docker memory for two instances plus Lambda containers; measured usage is recorded below.
+- Allow several GB of Docker memory for two instances plus Lambda containers; measured usage is recorded below.
 
 The pinned image runs locally. Data and artifacts stay in Docker volumes and each checkout's `.sst/local/<id>`; this example does not use Cloud Pods, remote hosting, or cloud snapshots. Telemetry is disabled. License activation and image/runtime downloads still contact their providers; this is not air-gapped operation. See [LocalStack configuration](https://docs.localstack.cloud/aws/customization/configuration-options/) and [local persistence](https://docs.localstack.cloud/aws/developer-tools/snapshots/persistence/).
 
@@ -33,7 +33,7 @@ node server.mjs a http://127.0.0.1:4567 3001
 node smoke.mjs http://127.0.0.1:3001 alpha
 ```
 
-Open <http://127.0.0.1:3001>. The flow invokes a real local handler, uses SDK v2 presigned S3 PUT/GET URLs, sends SQS work through SDK v3, and reads the migrated PostgreSQL table through Kysely's Data API dialect. The smoke test also commits and rolls back batch writes. Upload notifications take the S3 → SQS → local consumer path.
+Open <http://127.0.0.1:3001>. The flow invokes a real local handler, uses SDK v2 presigned S3 PUT/GET URLs, sends SQS work through SDK v3, and reads the migrated PostgreSQL table through Kysely's Data API dialect. The smoke test also commits and rolls back batch writes and rejects a tampered presigned URL. Presigned URL signature validation is enabled in Compose; see [LocalStack S3 signature validation](https://docs.localstack.cloud/aws/services/s3/). Upload notifications take the S3 → SQS → local consumer path.
 
 Edit `src/version.ts` or a handler and invoke again; SST rebuilds code without replacing data resources. Logs include the environment and Lambda request ID. An invalid edit fails the invocation instead of serving the previous build. For infrastructure changes, stop and restart SST; use the explicit reset below if LocalStack cannot update the resource reliably. This is not a promise of complete CloudFormation update parity.
 
@@ -78,6 +78,19 @@ pnpm test test/local.test.ts test/asset-schema.test.ts
 
 Snapshot persistence was explicitly deferred after observed snapshot-save timeouts and PostgreSQL connection failures on restore. Reproduce the rejected configuration by setting `PERSISTENCE: "1"` in a disposable copy, running the isolation script, and restarting it with the same volumes. Logs reported `waiting on snapshot save timed out` and `DatabaseErrorException`; no cloud snapshots were involved.
 
-Work in progress: full two-checkout measurements will be recorded here before this implementation is reported complete. Already verified: real worker errors/timeouts/concurrency/reload, Lambda-container routing, SQS failure redelivery, native PostgreSQL Data API transactions/batch, full CDK deployment/custom-resource callbacks/migrations, the HTTP smoke test, package build, and 209 existing construct/project regressions. No real-AWS smoke deployment has been performed.
+Tested on 2026-09-26: Apple M5 Pro (18 cores), 64 GiB RAM, macOS 26.6.2, OrbStack/Docker Engine 29.4.0 (15.66 GiB available to Docker), Node 22.23.0, pnpm 10.12.3. LocalStack 2026.8.4 (build f26fc4d36, Ultimate trial), pinned by digest in Compose. CDK 2.253.0, toolkit 1.1.1, cdk-assets 3.3.1, schema reader 53.23.0. LocalStack reports the requested RDS engine version as 17.7, but `SELECT version()` returns **PostgreSQL 17.11**; exact AWS patch-version parity is not claimed.
+
+Verified with real resources and workers:
+
+- Two managed Git checkouts, distinct markers/ports/volumes and resource bindings; S3 and SQS events produced rows only in their own PostgreSQL instance.
+- Twelve concurrent cold invocations with isolated bindings/request IDs, error, timeout, worker exit, valid and broken source edits, and recovery.
+- SDK v2 SigV4 S3 URLs accepted and tampered URLs rejected with HTTP 403 in both environments; SDK v3 SQS/Data API; Kysely migration, commit/rollback and batch statements; S3-created notification through SQS.
+- A-only edit left B unchanged. A consumer crash redelivered successfully. Messages sent while SST A was stopped survived and completed after restart. Resetting A's Docker volume left B's reads and a second complete smoke flow working.
+- Host provisioning network guard recorded only `127.0.0.1:4567/4568` and their LocalStack S3 virtual-host domains. Handler guards reject nonlocal HTTP/SDK/fetch destinations. Docker logs verified local custom-resource callbacks; this is not an OS-level network sandbox for arbitrary user code.
+- `pnpm --dir packages/sst build` passed. Final `pnpm --dir packages/sst test` under Node 22: **1,030 tests, 36 files passed**, 47.80 seconds. This includes existing nonlocal construct/binding regressions plus schema, semaphore, migration-error and real-worker checks. No real-AWS smoke deployment was performed.
+
+Measured no-snapshot run (images already cached, fresh Docker volumes): Container launch through migration/readiness **72.7s A / 67.4s B**; the SST CLI portion was **61.1s each** after Docker health. Cached SST restart with existing resources **3.0s**. Code-edit-to-result **2.0s**. Cold image download is unmeasured because the image was already installed; no shared Docker image cache was removed for benchmarking.
+
+An idle sample after both workloads: LocalStack **809/816 MiB**, its ten Lambda containers **975 MiB total** (roughly **2.5 GiB Docker total**), SST processes **441/351 MiB RSS**, web servers **66/64 MiB RSS**. Sample Docker CPU: LocalStack **1.01%/4.41%**, Lambda containers each **0.02–0.17%**; host SST/web CPU **0%** at the sample. These are one-time observations, not peak-memory or throughput guarantees. During concurrent startup, LocalStack alone reached a sampled **11.9%/34.9% CPU** and **776/723 MiB**. The script prints fresh measurements for your hardware.
 
 References: [issue #18](https://github.com/Bluestone-Health/sst-v2/issues/18), [LocalStack Lambda](https://docs.localstack.cloud/aws/services/lambda/), [RDS](https://docs.localstack.cloud/aws/services/rds/), [CDK integration](https://docs.localstack.cloud/aws/connecting/infrastructure-as-code/aws-cdk/).

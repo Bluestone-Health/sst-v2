@@ -1,6 +1,6 @@
 # Local mode for issue #18
 
-Status: bridge design approved. Ultimate trial available. Implementation and real LocalStack verification in progress; final evidence belongs in examples/localstack/README.md.
+Status: bridge design approved. Ultimate trial available. Implementation and two-checkout LocalStack lifecycle verification passed; measured evidence is in examples/localstack/README.md. Snapshot persistence is disabled by Allen’s explicit choice after observed Data API stalls; Docker restart requires reset.
 
 ## Required outcome
 
