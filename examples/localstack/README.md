@@ -22,7 +22,7 @@ cd examples/localstack
 pnpm install --ignore-workspace --frozen-lockfile
 export COMPOSE_PROJECT_NAME=sst-issue18-a LOCALSTACK_PORT=4567
 # LOCALSTACK_AUTH_TOKEN must already be exported in this shell.
-docker compose up -d
+docker compose up -d --wait
 MARKER=alpha pnpm local --env a --endpoint http://127.0.0.1:4567 --port 13559
 ```
 
@@ -30,6 +30,11 @@ Wait for `Local ready`, which follows successful deployment and migration. In an
 
 ```sh
 node server.mjs a http://127.0.0.1:4567 3001
+```
+
+Leave that server running. In a third terminal in the same directory, run the automated smoke test:
+
+```sh
 node smoke.mjs http://127.0.0.1:3001 alpha
 ```
 
