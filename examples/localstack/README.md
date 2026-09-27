@@ -9,7 +9,7 @@ Experimental, opt-in `sst local` for Node.js handlers, S3, standard SQS, and Pos
 - Free ports 4567 (LocalStack), 13559 (authenticated bridge), and 3001 (loopback web UI). Every concurrent checkout needs different ports, environment ID, and Compose project.
 - About several GB of Docker memory for two instances plus Lambda containers; measured usage is recorded below.
 
-The pinned image runs locally. Data, artifacts, and persistence stay in Docker volumes and each checkout's `.sst/local/<id>`; this example does not use Cloud Pods, remote hosting, or cloud snapshots. Telemetry is disabled. License activation and image/runtime downloads still contact their providers; this is not air-gapped operation. See [LocalStack configuration](https://docs.localstack.cloud/aws/customization/configuration-options/) and [local persistence](https://docs.localstack.cloud/aws/developer-tools/snapshots/persistence/).
+The pinned image runs locally. Data and artifacts stay in Docker volumes and each checkout's `.sst/local/<id>`; this example does not use Cloud Pods, remote hosting, or cloud snapshots. Telemetry is disabled. License activation and image/runtime downloads still contact their providers; this is not air-gapped operation. See [LocalStack configuration](https://docs.localstack.cloud/aws/customization/configuration-options/) and [local persistence](https://docs.localstack.cloud/aws/developer-tools/snapshots/persistence/).
 
 ## Start one checkout
 
@@ -37,7 +37,7 @@ Open <http://127.0.0.1:3001>. The flow invokes a real local handler, uses SDK v2
 
 Edit `src/version.ts` or a handler and invoke again; SST rebuilds code without replacing data resources. Logs include the environment and Lambda request ID. An invalid edit fails the invocation instead of serving the previous build. For infrastructure changes, stop and restart SST; use the explicit reset below if LocalStack cannot update the resource reliably. This is not a promise of complete CloudFormation update parity.
 
-Stop SST and the web server with Ctrl-C. Stop Docker while retaining data with `docker compose down`. To reset **only this environment's data**, stop its processes first, confirm `COMPOSE_PROJECT_NAME` and then:
+Stop SST and the web server with Ctrl-C; data remains while LocalStack runs. **LocalStack snapshots are disabled:** stopping/restarting the Docker project resets its resource state. After a Docker restart, reset its volume and local state before provisioning again. To reset **only this environment's data**, stop its processes first, confirm `COMPOSE_PROJECT_NAME` and then:
 
 ```sh
 docker compose down --volumes
@@ -54,7 +54,7 @@ Build and install **both separate checkouts** as above. Stop existing example SS
 node verify-isolation.mjs /absolute/path/to/checkout-b
 ```
 
-This script owns the `sst-issue18-a` and `sst-issue18-b` Compose projects and the ports listed above. **It deletes A's Docker volume** to test reset isolation, then stops both projects; B's volume remains. Do not use those project names for unrelated data. It starts both environments concurrently, runs the HTTP smoke test, checks bindings and marker separation, edits only A, crashes a consumer worker, restarts SST with pending work, then proves B still works after A is reset. It prints startup/edit timings, Docker/process memory and CPU, and the temporary log directory. Host provisioning uses a verification-only network guard that rejects HTTP/SDK/fetch destinations outside local hosts; the example handlers use the same guard.
+This script owns the `sst-issue18-a` and `sst-issue18-b` Compose projects and the ports listed above. **It deletes A's Docker volume** to test reset isolation, then stops both projects; B's volume remains, but its resource state is not restored on restart. Do not use those project names for unrelated data. It starts both environments concurrently, runs the HTTP smoke test, checks bindings and marker separation, edits only A, crashes a consumer worker, restarts SST with pending work, then proves B still works after A is reset. It prints startup/edit timings, Docker/process memory and CPU, and the temporary log directory. Host provisioning uses a verification-only network guard that rejects HTTP/SDK/fetch destinations outside local hosts; the example handlers use the same guard.
 
 Lower-level transport and database reproductions (from `packages/sst`, with LocalStack already on 4567):
 
@@ -75,6 +75,8 @@ pnpm test test/local.test.ts test/asset-schema.test.ts
 - Ordinary commands retain AWS defaults. The separately committed schema-reader alignment fixes the existing CDK 53/publisher 44 mismatch; revert that commit independently if needed. No deployment-mode toggle or toolkit upgrade was added.
 
 ## Verification evidence
+
+Snapshot persistence was explicitly deferred after observed snapshot-save timeouts and PostgreSQL connection failures on restore. Reproduce the rejected configuration by setting `PERSISTENCE: "1"` in a disposable copy, running the isolation script, and restarting it with the same volumes. Logs reported `waiting on snapshot save timed out` and `DatabaseErrorException`; no cloud snapshots were involved.
 
 Work in progress: full two-checkout measurements will be recorded here before this implementation is reported complete. Already verified: real worker errors/timeouts/concurrency/reload, Lambda-container routing, SQS failure redelivery, native PostgreSQL Data API transactions/batch, full CDK deployment/custom-resource callbacks/migrations, the HTTP smoke test, package build, and 209 existing construct/project regressions. No real-AWS smoke deployment has been performed.
 

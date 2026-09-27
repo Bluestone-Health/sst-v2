@@ -4,8 +4,10 @@ import { startLocalBridge } from "../../dist/runtime/local.js";
 import path from "node:path";
 import { mkdir } from "node:fs/promises";
 import { useBus } from "../../dist/bus.js";
+import { configureLocal } from "../../dist/local.js";
 
 const root = process.argv[2];
+configureLocal({ id: "probe", endpoint: "http://127.0.0.1:4567", port: 13559 });
 process.chdir(root);
 await mkdir(path.join(root, ".sst"), { recursive: true });
 setProject({

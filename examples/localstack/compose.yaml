@@ -7,7 +7,8 @@ services:
       LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:?Set the authorized LocalStack trial/license token}
       DISABLE_EVENTS: "1"
       SKIP_SSL_CERT_DOWNLOAD: "1"
-      PERSISTENCE: "1"
+      # Snapshot save/restore stalls RDS Data API on the tested image.
+      PERSISTENCE: "0"
       SQS_ENDPOINT_STRATEGY: dynamic
       MAIN_CONTAINER_NAME: ${COMPOSE_PROJECT_NAME:?Choose a unique Compose project}-localstack-1
       LAMBDA_DOCKER_NETWORK: ${COMPOSE_PROJECT_NAME}_default

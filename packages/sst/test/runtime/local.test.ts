@@ -22,6 +22,9 @@ test("local bridge isolates real invocations, failures, deadlines and reloads", 
         request: context.awsRequestId, name: context.functionName,
         remaining: context.getRemainingTimeInMillis(),
         hostSecret: process.env.PROBE_HOST_SECRET,
+        accessKey: process.env.AWS_ACCESS_KEY_ID,
+        endpoint: process.env.AWS_ENDPOINT_URL,
+        queue: process.env.SST_Queue_queueUrl_Work,
         bridgeSecret: process.env.SST_LOCAL_BRIDGE_TOKEN };
     }`;
   await writeFile(path.join(root, "package.json"), '{"type":"module"}');
@@ -110,6 +113,10 @@ test("local bridge isolates real invocations, failures, deadlines and reloads", 
           {
             env: {
               SST_Bucket_bucketName_Files: `files-${index}`,
+              SST_Queue_queueUrl_Work:
+                "http://localhost:4566/queue/us-east-1/000000000000/work",
+              AWS_ACCESS_KEY_ID: "must-not-survive",
+              AWS_ENDPOINT_URL: "https://sqs.us-east-1.amazonaws.com",
               AWS_LAMBDA_FUNCTION_NAME: "probe",
             },
           }
@@ -122,6 +129,9 @@ test("local bridge isolates real invocations, failures, deadlines and reloads", 
         version: "one",
         marker: String(index),
         bound: `files-${index}`,
+        accessKey: "test",
+        endpoint: "http://127.0.0.1:4567",
+        queue: "http://127.0.0.1:4567/queue/us-east-1/000000000000/work",
         request: reply.requestID,
         name: "probe",
       });
