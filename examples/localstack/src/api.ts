@@ -9,6 +9,7 @@ import { version } from "./version";
 
 // SDK v2 needs explicit endpoint configuration; SDK v3 reads AWS_ENDPOINT_URL.
 const s3 = new AWS.S3({
+  signatureVersion: "v4",
   endpoint: process.env.AWS_ENDPOINT_URL,
   s3ForcePathStyle: true,
 });

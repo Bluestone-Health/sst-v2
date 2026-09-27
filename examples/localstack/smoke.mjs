@@ -17,6 +17,17 @@ const invoke = async (event) => {
 const upload = await invoke({ action: "upload" });
 assert.equal(new URL(upload.upload).hostname, "127.0.0.1");
 assert.equal(
+  new URL(upload.upload).searchParams.get("X-Amz-Algorithm"),
+  "AWS4-HMAC-SHA256"
+);
+const invalid = new URL(upload.upload);
+invalid.searchParams.set("X-Amz-Signature", "0".repeat(64));
+assert.equal(
+  (await fetch(invalid, { method: "PUT", body: marker })).status,
+  403,
+  "Tampered presigned URLs must fail"
+);
+assert.equal(
   (await fetch(upload.upload, { method: "PUT", body: marker })).status,
   200
 );
