@@ -1,0 +1,81 @@
+# SST local example
+
+Experimental, opt-in `sst local` for Node.js handlers, S3, standard SQS, and PostgreSQL via RDS Data API. A LocalStack Lambda forwards to SST's existing compiler, watcher, and worker runtime. LocalStack owns event delivery and retries; every invocation gets its own host worker.
+
+## Requirements
+
+- Node **22**, pnpm 10, and Docker with its socket available.
+- A LocalStack entitlement covering RDS/Data API and your intended use. Verification uses an Ultimate trial. Supply `LOCALSTACK_AUTH_TOKEN` through your shell's environment; never put it in this repository. No AWS profile or real AWS credentials are needed.
+- Free ports 4567 (LocalStack), 13559 (authenticated bridge), and 3001 (loopback web UI). Every concurrent checkout needs different ports, environment ID, and Compose project.
+- About several GB of Docker memory for two instances plus Lambda containers; measured usage is recorded below.
+
+The pinned image runs locally. Data, artifacts, and persistence stay in Docker volumes and each checkout's `.sst/local/<id>`; this example does not use Cloud Pods, remote hosting, or cloud snapshots. Telemetry is disabled. License activation and image/runtime downloads still contact their providers; this is not air-gapped operation. See [LocalStack configuration](https://docs.localstack.cloud/aws/customization/configuration-options/) and [local persistence](https://docs.localstack.cloud/aws/developer-tools/snapshots/persistence/).
+
+## Start one checkout
+
+From the repository root, using Node 22:
+
+```sh
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm --dir packages/sst build
+cd examples/localstack
+pnpm install --ignore-workspace --frozen-lockfile
+export COMPOSE_PROJECT_NAME=sst-issue18-a LOCALSTACK_PORT=4567
+# LOCALSTACK_AUTH_TOKEN must already be exported in this shell.
+docker compose up -d
+MARKER=alpha pnpm local --env a --endpoint http://127.0.0.1:4567 --port 13559
+```
+
+Wait for `Local ready`, which follows successful deployment and migration. In another terminal in this directory:
+
+```sh
+node server.mjs a http://127.0.0.1:4567 3001
+node smoke.mjs http://127.0.0.1:3001 alpha
+```
+
+Open <http://127.0.0.1:3001>. The flow invokes a real local handler, uses SDK v2 presigned S3 PUT/GET URLs, sends SQS work through SDK v3, and reads the migrated PostgreSQL table through Kysely's Data API dialect. The smoke test also commits and rolls back batch writes. Upload notifications take the S3 → SQS → local consumer path.
+
+Edit `src/version.ts` or a handler and invoke again; SST rebuilds code without replacing data resources. Logs include the environment and Lambda request ID. An invalid edit fails the invocation instead of serving the previous build. For infrastructure changes, stop and restart SST; use the explicit reset below if LocalStack cannot update the resource reliably. This is not a promise of complete CloudFormation update parity.
+
+Stop SST and the web server with Ctrl-C. Stop Docker while retaining data with `docker compose down`. To reset **only this environment's data**, stop its processes first, confirm `COMPOSE_PROJECT_NAME` and then:
+
+```sh
+docker compose down --volumes
+rm -rf .sst/local/a
+```
+
+Do not run global Docker prune commands. A second checkout uses `sst-issue18-b`, env `b`, marker `beta`, and ports 4568/13560/3002. It has its own source files, dependencies/build, state, volume, network, and workers.
+
+## Reproduce isolation and failure checks
+
+Build and install **both separate checkouts** as above. Stop existing example SST/web processes. From A's `examples/localstack`, with the token exported:
+
+```sh
+node verify-isolation.mjs /absolute/path/to/checkout-b
+```
+
+This script owns the `sst-issue18-a` and `sst-issue18-b` Compose projects and the ports listed above. **It deletes A's Docker volume** to test reset isolation, then stops both projects; B's volume remains. Do not use those project names for unrelated data. It starts both environments concurrently, runs the HTTP smoke test, checks bindings and marker separation, edits only A, crashes a consumer worker, restarts SST with pending work, then proves B still works after A is reset. It prints startup/edit timings, Docker/process memory and CPU, and the temporary log directory. Host provisioning uses a verification-only network guard that rejects HTTP/SDK/fetch destinations outside local hosts; the example handlers use the same guard.
+
+Lower-level transport and database reproductions (from `packages/sst`, with LocalStack already on 4567):
+
+```sh
+node test/runtime/localstack.mjs
+node test/runtime/localstack-rds.mjs
+pnpm test test/local.test.ts test/asset-schema.test.ts
+```
+
+## Supported scope and limits
+
+- Node.js/TypeScript only. Workers run the host Node version: use Node 22 for this example. Python, containers, `enableLiveDev: false`, FIFO queues, non-SQS event sources, cloud context lookups, and services outside the local resource allowlist fail explicitly. Cross-stack/imported SQS event-source mappings are not supported initially.
+- Standard SQS batching and `ReportBatchItemFailures` are preserved. Errors, worker crashes, disconnects, and timeouts return Lambda failures for LocalStack to retry. This does not claim AWS production timing or complete FIFO/IAM/API Gateway parity.
+- Application SDK v3 clients use `AWS_ENDPOINT_URL`; SDK v2 clients must receive the endpoint explicitly. SQS clients should use `useQueueUrlAsEndpoint: false`, because CloudFormation may return its internal port in queue URLs. SST rewrites bound queue URLs for host workers. Do not hard-code real AWS endpoints in local handlers.
+- The bridge listens on the host for Docker access and requires a random per-environment bearer token. The unauthenticated Lambda Runtime API and web UI are loopback-only. Keep `.sst/local` private: it contains tokens, synthesized templates, logs, and local database credentials. One process owns each environment via a PID lock.
+- Compose sets Docker's `host.docker.internal:host-gateway` route and a per-project Lambda network. This route is verified on macOS/OrbStack. The Linux host-gateway configuration is supplied but has not been run on Linux or Docker Desktop in this test.
+- Raw CDK helper Lambdas execute in LocalStack containers; SST functions, including the existing RDSv2 migration handler, execute on the host. No SST IoT bridge or SST cloud bootstrap is used. The embedded CDK toolkit's bootstrap/assets, S3-notification callback, and migration callback are exercised locally.
+- Ordinary commands retain AWS defaults. The separately committed schema-reader alignment fixes the existing CDK 53/publisher 44 mismatch; revert that commit independently if needed. No deployment-mode toggle or toolkit upgrade was added.
+
+## Verification evidence
+
+Work in progress: full two-checkout measurements will be recorded here before this implementation is reported complete. Already verified: real worker errors/timeouts/concurrency/reload, Lambda-container routing, SQS failure redelivery, native PostgreSQL Data API transactions/batch, full CDK deployment/custom-resource callbacks/migrations, the HTTP smoke test, package build, and 209 existing construct/project regressions. No real-AWS smoke deployment has been performed.
+
+References: [issue #18](https://github.com/Bluestone-Health/sst-v2/issues/18), [LocalStack Lambda](https://docs.localstack.cloud/aws/services/lambda/), [RDS](https://docs.localstack.cloud/aws/services/rds/), [CDK integration](https://docs.localstack.cloud/aws/connecting/infrastructure-as-code/aws-cdk/).

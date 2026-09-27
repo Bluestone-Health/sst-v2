@@ -17,7 +17,11 @@ export const useRuntimeServerConfig = lazy(async () => {
   };
 });
 
-export const useRuntimeServer = lazy(async () => {
+export const useRuntimeServer = lazy(() => startRuntimeServer());
+
+export async function startRuntimeServer(
+  options: { host?: string; port?: number } = {}
+) {
   const bus = useBus();
   const app = express();
   const workers = await useRuntimeWorkers();
@@ -40,6 +44,7 @@ export const useRuntimeServer = lazy(async () => {
   }
 
   workers.subscribe("worker.exited", async (evt) => {
+    invocationsQueued.delete(evt.properties.workerID);
     const waiting = workersWaiting.get(evt.properties.workerID);
     if (!waiting) return;
     workersWaiting.delete(evt.properties.workerID);
@@ -210,5 +215,16 @@ export const useRuntimeServer = lazy(async () => {
     }
   );
 
-  app.listen(cfg.port);
-});
+  return await new Promise<import("http").Server>((resolve, reject) => {
+    const server = app.listen(
+      { port: options.port ?? cfg.port, host: options.host },
+      () => {
+        const address = server.address() as import("net").AddressInfo;
+        cfg.port = address.port;
+        cfg.url = `http://${options.host || "localhost"}:${address.port}`;
+        resolve(server);
+      }
+    );
+    server.once("error", reject);
+  });
+}

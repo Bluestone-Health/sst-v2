@@ -197,6 +197,8 @@ export const useFunctionBuilder = lazy(() => {
       return result.build(functionID);
     },
     build: async (functionID: string) => {
+      // Never serve an artifact whose files a rebuild has removed or replaced.
+      artifacts.delete(functionID);
       const unlock = await semaphore.lock();
       try {
         const result = await handlers.build(functionID, "start");
