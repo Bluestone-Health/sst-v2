@@ -79,6 +79,57 @@ pnpm test test/local.test.ts test/asset-schema.test.ts
 - Raw CDK helper Lambdas execute in LocalStack containers; SST functions, including the existing RDSv2 migration handler, execute on the host. No SST IoT bridge or SST cloud bootstrap is used. The embedded CDK toolkit's bootstrap/assets, S3-notification callback, and migration callback are exercised locally.
 - Ordinary commands retain AWS defaults. The separately committed schema-reader alignment fixes the existing CDK 53/publisher 44 mismatch; revert that commit independently if needed. No deployment-mode toggle or toolkit upgrade was added.
 
+## VSCode launch configuration
+
+The `.vscode/launch.json` file includes configurations for debugging LocalStack Lambda workers and launching the LocalStack server. Use the compound configuration "LocalStack: app + Lambda debugging" to start both concurrently.
+
+```json
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "LocalStack: Lambda workers",
+      "runtimeExecutable": "${env:HOME}/.local/share/fnm/node-versions/v22.23.0/installation/bin/node",
+      "program": "${workspaceFolder}/packages/sst/dist/cli/sst.js",
+      "cwd": "${workspaceFolder}/examples/localstack",
+      "args": ["local", "--env", "a", "--endpoint", "http://127.0.0.1:4567", "--port", "13559"],
+      "env": { "MARKER": "alpha" },
+      "console": "integratedTerminal",
+      "autoAttachChildProcesses": true,
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/examples/localstack/.sst/local/a/artifacts/**/*.mjs", "${workspaceFolder}/examples/localstack/.sst/local/a/artifacts/**/*.js"],
+      "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+      "skipFiles": ["<node_internals>/**"],
+      "preLaunchTask": "localstack: build SST"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Launch Localstack Config",
+      "runtimeExecutable": "${env:HOME}/.local/share/fnm/node-versions/v22.23.0/installation/bin/node",
+      "cwd": "${workspaceFolder}/examples/localstack",
+      "skipFiles": ["<node_internals>/**"],
+      "program": "${workspaceFolder}/examples/localstack/server.mjs",
+      "console": "integratedTerminal",
+      "args": ["a", "http://127.0.0.1:4567", "3001"]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "LocalStack: app + Lambda debugging",
+      "configurations": ["LocalStack: Lambda workers", "Launch Localstack Config"],
+      "stopAll": true
+    }
+  ]
+}
+
+```
+
 ## Verification evidence
 
 Snapshot persistence was explicitly deferred after observed snapshot-save timeouts and PostgreSQL connection failures on restore. Reproduce the rejected configuration by setting `PERSISTENCE: "1"` in a disposable copy, running the isolation script, and restarting it with the same volumes. Logs reported `waiting on snapshot save timed out` and `DatabaseErrorException`; no cloud snapshots were involved.
