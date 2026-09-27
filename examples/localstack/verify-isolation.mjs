@@ -43,8 +43,8 @@ const environments = roots.map((root, index) => ({
     COMPOSE_PROJECT_NAME: `sst-issue18-${index ? "b" : "a"}`,
     LOCALSTACK_PORT: String(4567 + index),
     MARKER: index ? "beta" : "alpha",
-      NODE_OPTIONS: `--require=${path.join(root, "network-guard.cjs")}`,
-      SST_LOCAL_NETWORK_LOG: path.join(logs, `${index ? "b" : "a"}-network.log`),
+    NODE_OPTIONS: `--require=${path.join(root, "network-guard.cjs")}`,
+    SST_LOCAL_NETWORK_LOG: path.join(logs, `${index ? "b" : "a"}-network.log`),
   },
 }));
 const processes = [];

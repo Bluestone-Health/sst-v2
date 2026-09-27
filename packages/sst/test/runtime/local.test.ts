@@ -103,24 +103,25 @@ test("local bridge isolates real invocations, failures, deadlines and reloads", 
     expect((await invoke({}, { functionID: "missing" })).status).toBe(400);
     expect((await invoke({}, { functionID: "unsupported" })).status).toBe(400);
     expect((await invoke({}, { deadline: -1 })).status).toBe(400);
-    const replies = await Promise.all([
-      invoke({ marker: "a", delay: 80 }),
-      invoke(
-        { marker: "b" },
-        {
-          env: {
-            SST_Bucket_bucketName_Files: "files-b",
-            AWS_LAMBDA_FUNCTION_NAME: "probe",
-          },
-        }
-      ),
-    ]);
+    const replies = await Promise.all(
+      Array.from({ length: 12 }, (_, index) =>
+        invoke(
+          { marker: String(index), delay: 80 },
+          {
+            env: {
+              SST_Bucket_bucketName_Files: `files-${index}`,
+              AWS_LAMBDA_FUNCTION_NAME: "probe",
+            },
+          }
+        )
+      )
+    );
     for (const [index, reply] of replies.entries()) {
       expect(reply.status, JSON.stringify(reply.body)).toBe(200);
       expect(reply.body).toMatchObject({
         version: "one",
-        marker: index ? "b" : "a",
-        bound: index ? "files-b" : "files-a",
+        marker: String(index),
+        bound: `files-${index}`,
         request: reply.requestID,
         name: "probe",
       });
