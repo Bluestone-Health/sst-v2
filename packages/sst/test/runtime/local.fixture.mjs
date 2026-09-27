@@ -5,6 +5,12 @@ import path from "node:path";
 import { mkdir } from "node:fs/promises";
 import { useBus } from "../../dist/bus.js";
 import { configureLocal } from "../../dist/local.js";
+import {
+  useFunctionBuilder,
+  useRuntimeHandlers,
+} from "../../dist/runtime/handlers.js";
+import { useRuntimeWorkers } from "../../dist/runtime/workers.js";
+import { once } from "node:events";
 
 const root = process.argv[2];
 configureLocal({ id: "probe", endpoint: "http://127.0.0.1:4567", port: 13559 });
@@ -29,6 +35,30 @@ useFunctions().add("unsupported", {
 useBus().subscribe("function.build.failed", (event) =>
   console.error(event.properties.errors)
 );
+// Hold startup across the HTTP deadline, then let the real build/worker proceed.
+useBus().subscribe("function.invoked", ({ properties }) => {
+  const stage = properties.event.pauseStartup;
+  if (!stage) return;
+  const target =
+    stage === "build"
+      ? useFunctionBuilder()
+      : useRuntimeHandlers().for("nodejs22.x");
+  const key = stage === "build" ? "artifact" : "startWorker";
+  const original = target[key];
+  target[key] = async (...args) => {
+    target[key] = original;
+    await once(process, "message");
+    const result = await original(...args);
+    setTimeout(async () => {
+      const workers = await useRuntimeWorkers();
+      process.send({
+        live: !!workers.fromID(properties.workerID),
+        request: workers.getCurrentRequestID(properties.workerID),
+      });
+    }, 250);
+    return result;
+  };
+});
 const bridge = await startLocalBridge({
   host: "127.0.0.1",
   port: 0,

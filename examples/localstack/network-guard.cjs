@@ -27,6 +27,11 @@ for (const protocol of ["http", "https"]) {
     check(url);
     return request.call(this, input, ...args);
   };
+  module.get = function (...args) {
+    const req = module.request(...args);
+    req.end();
+    return req;
+  };
 }
 const fetch = globalThis.fetch;
 globalThis.fetch = function (input, ...args) {

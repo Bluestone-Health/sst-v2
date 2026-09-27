@@ -51,6 +51,15 @@ export async function startRuntimeServer(
   });
 
   bus.subscribe("function.invoked", async (evt) => {
+    if (evt.properties.signal?.aborted) return;
+    evt.properties.signal?.addEventListener(
+      "abort",
+      () => {
+        invocationsQueued.delete(evt.properties.workerID);
+        workersWaiting.delete(evt.properties.workerID);
+      },
+      { once: true }
+    );
     const worker = workersWaiting.get(evt.properties.workerID);
     if (worker) {
       workersWaiting.delete(evt.properties.workerID);

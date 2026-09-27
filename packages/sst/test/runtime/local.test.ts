@@ -1,6 +1,6 @@
 import { test, expect } from "vitest";
 import { spawn } from "node:child_process";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID, randomBytes } from "node:crypto";
@@ -12,7 +12,9 @@ test("local bridge isolates real invocations, failures, deadlines and reloads", 
   const root = await mkdtemp(path.join(tmpdir(), "sst-local-"));
   const token = randomBytes(32).toString("hex");
   const source = (version: string) => `
+    import { writeFileSync } from "node:fs";
     export async function main(event, context) {
+      if (event.write) writeFileSync(event.write, "executed");
       if (event.fail) throw new Error("probe failure");
       if (event.timeout) while (true) {}
       if (event.exit) process.exit(1);
@@ -39,7 +41,7 @@ test("local bridge isolates real invocations, failures, deadlines and reloads", 
         PROBE_TOKEN: token,
         PROBE_HOST_SECRET: "must-not-leak",
       },
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["ignore", "pipe", "pipe", "ipc"],
     }
   );
   let stderr = "";
@@ -147,6 +149,21 @@ test("local bridge isolates real invocations, failures, deadlines and reloads", 
     );
     expect((await invoke({ exit: true })).status).toBe(502);
     expect((await invoke({ marker: "after-timeout" })).status).toBe(200);
+    for (const pauseStartup of ["build", "start"]) {
+      const marker = path.join(root, `${pauseStartup}-executed`);
+      expect(
+        (
+          await invoke(
+            { pauseStartup, write: marker, timeout: true },
+            { deadline: 150 }
+          )
+        ).status
+      ).toBe(504);
+      const resumed = once(child, "message");
+      child.send("resume");
+      expect((await resumed)[0]).toEqual({ live: false });
+      await expect(readFile(marker)).rejects.toMatchObject({ code: "ENOENT" });
+    }
     await writeFile(path.join(root, "handler.ts"), source("two"));
     let version = "one";
     for (let attempt = 0; attempt < 30 && version !== "two"; attempt++) {

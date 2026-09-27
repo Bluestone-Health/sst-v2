@@ -70,6 +70,7 @@ export async function startLocalBridge(options: {
     const workerID = randomUUID();
     const deadline = Date.now() + input.deadline;
     const handler = handlers.for(props.runtime);
+    const controller = new AbortController();
     let finished = false;
     const matches = (evt: {
       properties: { workerID: string; requestID: string };
@@ -109,6 +110,7 @@ export async function startLocalBridge(options: {
       finished = true;
       clearTimeout(timer);
       subscriptions.forEach((sub) => bus.unsubscribe(sub));
+      controller.abort();
       await handler.stopWorker(workerID);
       if (!res.destroyed) res.status(status).json(body);
     }
@@ -146,6 +148,7 @@ export async function startLocalBridge(options: {
       }
       bus.publish("function.invoked", {
         ...input,
+        signal: controller.signal,
         event: input.event,
         workerID,
         env,

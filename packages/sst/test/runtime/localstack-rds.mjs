@@ -118,5 +118,6 @@ try {
   if (secretArn)
     await secrets
       .deleteSecret({ SecretId: secretArn, ForceDeleteWithoutRecovery: true })
-      .promise();
+      .promise()
+      .catch(console.error);
 }
