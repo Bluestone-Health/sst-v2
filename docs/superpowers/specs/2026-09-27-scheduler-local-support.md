@@ -1,6 +1,6 @@
 # Scheduler local support — proposed scope
 
-Status: user approved local substitutes and explicit triggers; implementation and verification in progress.
+Status: implemented and verified in stacked PR #20. User approved local substitutes, explicit triggers, and the documented CodeBuild cancellation limitation.
 
 ## Outcome
 
@@ -85,5 +85,6 @@ synthesis evidence, not an end-to-end Scheduler application deployment.
   S3 inbound-email events and captured SES delivery were exercised.
 - CodeBuild requires a host bind mount. The first cold image startup also
   emitted a LocalStack build-monitor race, despite successful handler execution.
-- StopBuild returns HTTP 501. Scheduler has no Job.cancel callers. User decision
-  on retaining this limitation versus implementing a separate runner is pending.
+- StopBuild returns HTTP 501. Scheduler has no Job.cancel callers. Allen approved
+  retaining native CodeBuild with this documented limitation; no separate runner
+  or cancellation workaround is required.
