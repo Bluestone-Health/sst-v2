@@ -53,11 +53,15 @@ test("host bindings discard credential and endpoint overrides", () => {
     AWS_ENDPOINT_URL_DYNAMODB: "https://dynamodb.us-east-1.amazonaws.com",
     AWS_IGNORE_CONFIGURED_ENDPOINT_URLS: "true",
     SST_LOCAL_BRIDGE_TOKEN: "secret",
+    SST_Secret_value_LOCAL_SECRET: "synthetic-local-secret",
+    SST_RDSv2_clusterArn_Database: "local-cluster",
     SST_Queue_queueUrl_Work:
       "http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/work.fifo",
   });
   expect(env.AWS_PROFILE).toBeUndefined();
   expect(env.AWS_ROLE_ARN).toBeUndefined();
+  expect(env.SST_Secret_value_LOCAL_SECRET).toBe("synthetic-local-secret");
+  expect(env.SST_RDSv2_clusterArn_Database).toBe("local-cluster");
   expect(env.SST_LOCAL_BRIDGE_TOKEN).toBeUndefined();
   expect(env.AWS_ENDPOINT_URL_DYNAMODB).toBeUndefined();
   expect(env.AWS_ACCESS_KEY_ID).toBe("test");
