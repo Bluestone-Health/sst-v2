@@ -35,6 +35,9 @@ export function configureLocal(options: LocalOptions) {
       "Choose a local bridge port between 1024 and 65535."
     );
   local = { ...options, endpoint: endpoint.origin };
+  // Inherited resource bindings may belong to a cloud stage or another checkout.
+  for (const key of Object.keys(process.env))
+    if (/^SST_[^_]+_[a-z][^_]*_.+/.test(key)) delete process.env[key];
   const env = localEnvironment(process.env);
   for (const key of Object.keys(process.env))
     if (!(key in env)) delete process.env[key];

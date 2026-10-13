@@ -81,7 +81,7 @@ pnpm test test/local.test.ts test/asset-schema.test.ts
 
 ## VSCode launch configuration
 
-The `.vscode/launch.json` file includes configurations for debugging LocalStack Lambda workers and launching the LocalStack server. Use the compound configuration "LocalStack: app + Lambda debugging" to start both concurrently.
+Create `.vscode/launch.json` in the repository root with the following configurations. Use Node 22 on `PATH`, then select the compound configuration "LocalStack: app + Lambda debugging" to start both concurrently.
 
 ```json
 {
@@ -94,7 +94,7 @@ The `.vscode/launch.json` file includes configurations for debugging LocalStack 
       "type": "node",
       "request": "launch",
       "name": "LocalStack: Lambda workers",
-      "runtimeExecutable": "${env:HOME}/.local/share/fnm/node-versions/v22.23.0/installation/bin/node",
+      "runtimeExecutable": "node",
       "program": "${workspaceFolder}/packages/sst/dist/cli/sst.js",
       "cwd": "${workspaceFolder}/examples/localstack",
       "args": ["local", "--env", "a", "--endpoint", "http://127.0.0.1:4567", "--port", "13559"],
@@ -111,7 +111,7 @@ The `.vscode/launch.json` file includes configurations for debugging LocalStack 
       "type": "node",
       "request": "launch",
       "name": "Launch Localstack Config",
-      "runtimeExecutable": "${env:HOME}/.local/share/fnm/node-versions/v22.23.0/installation/bin/node",
+      "runtimeExecutable": "node",
       "cwd": "${workspaceFolder}/examples/localstack",
       "skipFiles": ["<node_internals>/**"],
       "program": "${workspaceFolder}/examples/localstack/server.mjs",
@@ -128,6 +128,23 @@ The `.vscode/launch.json` file includes configurations for debugging LocalStack 
   ]
 }
 
+```
+
+Create `.vscode/tasks.json` in the repository root for the referenced build task:
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "localstack: build SST",
+      "type": "shell",
+      "command": "pnpm --dir packages/sst build",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    }
+  ]
+}
 ```
 
 ## Verification evidence
