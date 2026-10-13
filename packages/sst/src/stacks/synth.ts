@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from "url";
 import { VisibleError } from "../error.js";
 import { Semaphore } from "../util/semaphore.js";
 import { Configuration } from "../util/user-configuration.js";
+import { useLocal } from "../local.js";
 
 interface SynthOptions {
   buildDir?: string;
@@ -85,6 +86,12 @@ export async function synth(opts: SynthOptions) {
           outdir: opts.buildDir,
           context: {
             ...cfg.context.all,
+            ...(useLocal()
+              ? {
+                  [`availability-zones:account=000000000000:region=${project.config.region}`]:
+                    [`${project.config.region}a`, `${project.config.region}b`],
+                }
+              : {}),
             [cxapi.PATH_METADATA_ENABLE_CONTEXT]:
               project.config.cdk?.pathMetadata ?? false,
           },
@@ -99,6 +106,10 @@ export async function synth(opts: SynthOptions) {
       const provider = await useAWSProvider();
 
       if (missing && missing.length) {
+        if (useLocal())
+          throw new VisibleError(
+            "Local mode does not support cloud context lookups; supply explicit resource attributes."
+          );
         const next = missing.map((x) => x.key);
         if (next.length === previous.size && next.every((x) => previous.has(x)))
           throw new VisibleError(formatErrorMessage(next.join("")));

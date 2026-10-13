@@ -43,32 +43,36 @@ export const useNodeHandler = (): RuntimeHandler => {
     canHandle: (input) => input.startsWith("nodejs"),
     startWorker: async (input) => {
       const workers = await useRuntimeWorkers();
-      new Promise(async () => {
-        const worker = new Worker(
-          url.fileURLToPath(
-            new URL("../../support/nodejs-runtime/index.mjs", import.meta.url)
-          ),
-          {
-            env: {
-              ...input.environment,
-              IS_LOCAL: "true",
-            },
-            execArgv: ["--enable-source-maps"],
-            workerData: input,
-            stderr: true,
-            stdin: true,
-            stdout: true,
-          }
-        );
-        worker.stdout.on("data", (data: Buffer) => {
-          workers.stdout(input.workerID, data.toString());
-        });
-        worker.stderr.on("data", (data: Buffer) => {
-          workers.stdout(input.workerID, data.toString());
-        });
-        worker.on("exit", () => workers.exited(input.workerID));
-        threads.set(input.workerID, worker);
+      const worker = new Worker(
+        url.fileURLToPath(
+          new URL("../../support/nodejs-runtime/index.mjs", import.meta.url)
+        ),
+        {
+          env: {
+            ...input.environment,
+            IS_LOCAL: "true",
+          },
+          execArgv: ["--enable-source-maps"],
+          workerData: input,
+          stderr: true,
+          stdin: true,
+          stdout: true,
+        }
+      );
+      worker.stdout.on("data", (data: Buffer) => {
+        workers.stdout(input.workerID, data.toString());
       });
+      worker.stderr.on("data", (data: Buffer) => {
+        workers.stdout(input.workerID, data.toString());
+      });
+      worker.on("error", (error) =>
+        workers.stdout(input.workerID, error.stack || error.message)
+      );
+      worker.on("exit", () => {
+        threads.delete(input.workerID);
+        workers.exited(input.workerID);
+      });
+      threads.set(input.workerID, worker);
     },
     stopWorker: async (workerID) => {
       const worker = threads.get(workerID);

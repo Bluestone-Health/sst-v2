@@ -188,24 +188,36 @@ interface Artifact {
 
 export const useFunctionBuilder = lazy(() => {
   const artifacts = new Map<string, Artifact>();
+  const building = new Map<string, Promise<Artifact | undefined>>();
   const handlers = useRuntimeHandlers();
   const semaphore = new Semaphore(4);
 
   const result = {
     artifact: (functionID: string) => {
+      if (building.has(functionID)) return building.get(functionID)!;
       if (artifacts.has(functionID)) return artifacts.get(functionID)!;
       return result.build(functionID);
     },
     build: async (functionID: string) => {
-      const unlock = await semaphore.lock();
+      if (building.has(functionID)) return building.get(functionID)!;
+      // Never serve an artifact whose files a rebuild has removed or replaced.
+      artifacts.delete(functionID);
+      const pending = (async () => {
+        const unlock = await semaphore.lock();
+        try {
+          const result = await handlers.build(functionID, "start");
+          if (!result || result.type === "error") return;
+          artifacts.set(functionID, result);
+          return artifacts.get(functionID)!;
+        } finally {
+          unlock();
+        }
+      })();
+      building.set(functionID, pending);
       try {
-        const result = await handlers.build(functionID, "start");
-        if (!result) return;
-        if (result.type === "error") return;
-        artifacts.set(functionID, result);
-        return artifacts.get(functionID)!;
+        return await pending;
       } finally {
-        unlock();
+        building.delete(functionID);
       }
     },
   };

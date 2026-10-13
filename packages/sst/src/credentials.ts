@@ -11,9 +11,12 @@ import stupid from "aws-sdk/lib/maintenance_mode_message.js";
 stupid.suppress = true;
 import { useProject } from "./project.js";
 import { lazy } from "./util/lazy.js";
+import { useLocal } from "./local.js";
 
 export const useAWSCredentialsProvider: () => AwsCredentialIdentityProvider =
   lazy(() => {
+    if (useLocal())
+      return async () => ({ accessKeyId: "test", secretAccessKey: "test" });
     const project = useProject();
     Logger.debug("Using AWS profile", project.config.profile);
     const provider = fromNodeProviderChain({
@@ -51,6 +54,12 @@ export const useAWSCredentials = () => {
 };
 
 export const useSTSIdentity = lazy(async () => {
+  if (useLocal())
+    return {
+      Account: "000000000000",
+      UserId: "local",
+      Arn: "arn:aws:iam::000000000000:root",
+    };
   const sts = useAWSClient(STSClient);
   const identity = await sts.send(new GetCallerIdentityCommand({}));
   Logger.debug(
@@ -100,45 +109,50 @@ export function useAWSClient<C extends any>(
     };
   })();
   const result = new client({
+    ...(useLocal()
+      ? { endpoint: useLocal()!.endpoint, forcePathStyle: true }
+      : {}),
     region: project.config.region,
     credentials: credentials,
-    retryStrategy: new StandardRetryStrategy(async () => 10000, {
-      retryDecider: (e: any) => {
-        // Handle no internet connection => retry
-        if (e.code === "ENOTFOUND") {
-          printNoInternet(e.message);
-          return true;
-        }
+    retryStrategy: useLocal()
+      ? new StandardRetryStrategy(async () => 2)
+      : new StandardRetryStrategy(async () => 10000, {
+          retryDecider: (e: any) => {
+            // Handle no internet connection => retry
+            if (e.code === "ENOTFOUND") {
+              printNoInternet(e.message);
+              return true;
+            }
 
-        // Handle throttling errors => retry
-        if (
-          [
-            "ThrottlingException",
-            "Throttling",
-            "TooManyRequestsException",
-            "OperationAbortedException",
-            "TimeoutError",
-            "NetworkingError",
-          ].includes(e.name)
-        ) {
-          Logger.debug("Retry AWS call", e.name, e.message);
-          return true;
-        }
+            // Handle throttling errors => retry
+            if (
+              [
+                "ThrottlingException",
+                "Throttling",
+                "TooManyRequestsException",
+                "OperationAbortedException",
+                "TimeoutError",
+                "NetworkingError",
+              ].includes(e.name)
+            ) {
+              Logger.debug("Retry AWS call", e.name, e.message);
+              return true;
+            }
 
-        return false;
-      },
-      delayDecider: (_, attempts) => {
-        return Math.min(1.5 ** attempts * 100, 5000);
-      },
-      // AWS SDK v3 has an idea of "retry tokens" which are used to
-      // prevent multiple retries from happening at the same time.
-      // This is a workaround to disable that.
-      retryQuota: {
-        hasRetryTokens: () => true,
-        releaseRetryTokens: () => {},
-        retrieveRetryTokens: () => 1,
-      },
-    }),
+            return false;
+          },
+          delayDecider: (_, attempts) => {
+            return Math.min(1.5 ** attempts * 100, 5000);
+          },
+          // AWS SDK v3 has an idea of "retry tokens" which are used to
+          // prevent multiple retries from happening at the same time.
+          // This is a workaround to disable that.
+          retryQuota: {
+            hasRetryTokens: () => true,
+            releaseRetryTokens: () => {},
+            retrieveRetryTokens: () => 1,
+          },
+        }),
   });
   cache.set(client.name, result);
   Logger.debug("Created AWS client", client.name);

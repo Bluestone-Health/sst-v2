@@ -27,6 +27,7 @@ import * as functionUrlCors from "./util/functionUrlCors.js";
 import url from "url";
 import { useDeferredTasks } from "./deferred_task.js";
 import { useProject } from "../project.js";
+import { useLocal } from "../local.js";
 import { VisibleError } from "../error.js";
 import { useRuntimeHandlers } from "../runtime/handlers.js";
 import { createAppContext } from "./context.js";
@@ -907,6 +908,8 @@ export class Function extends CDKFunction implements SSTConstruct {
       ];
     const isLiveDevEnabled =
       app.mode === "dev" && (props.enableLiveDev === false ? false : true);
+    if (useLocal() && (!props.runtime.startsWith("nodejs") || !isLiveDevEnabled))
+      throw new Error(`Local mode requires Node.js with live development enabled: ${id}`);
 
     Function.validateHandlerSet(id, props);
     Function.validateVpcSettings(id, props);
@@ -977,9 +980,9 @@ export class Function extends CDKFunction implements SSTConstruct {
               description,
               runtime: CDKRuntime.NODEJS_22_X,
               code: Code.fromAsset(
-                path.resolve(__dirname, "../support/bridge")
+                path.resolve(__dirname, useLocal() ? "../support/local-bridge" : "../support/bridge")
               ),
-              handler: "live-lambda.handler",
+              handler: useLocal() ? "index.handler" : "live-lambda.handler",
               layers: [],
             }),
         architecture,
@@ -995,7 +998,13 @@ export class Function extends CDKFunction implements SSTConstruct {
         ...(debugOverrideProps || {}),
       });
       this.addEnvironment("SST_FUNCTION_ID", this.node.addr);
+      const local = useLocal();
+      if (local) {
+        this.addEnvironment("SST_LOCAL_BRIDGE_URL", `http://host.docker.internal:${local.port}`);
+        this.addEnvironment("SST_LOCAL_BRIDGE_TOKEN", local.token!);
+      }
       useDeferredTasks().add(async () => {
+        if (useLocal()) return;
         if (app.isRunningSSTTest()) return;
         const bootstrap = await useBootstrap();
         const bootstrapBucketArn = `arn:${Stack.of(this).partition}:s3:::${

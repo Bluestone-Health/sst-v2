@@ -1,0 +1,18 @@
+{
+  "name": "sst-localstack-example",
+  "private": true,
+  "type": "module",
+  "scripts": { "local": "sst local", "web": "node server.mjs", "smoke": "node smoke.mjs" },
+  "dependencies": {
+    "sst": "link:../../packages/sst/dist",
+    "aws-cdk-lib": "2.253.0",
+    "constructs": "10.3.0",
+    "aws-sdk": "2.1692.0",
+    "@aws-sdk/client-lambda": "3.699.0",
+    "@aws-sdk/client-s3": "3.699.0",
+    "@aws-sdk/client-sqs": "3.699.0",
+    "@aws-sdk/client-rds-data": "3.699.0",
+    "kysely": "0.27.4",
+    "kysely-data-api": "1.0.1"
+  }
+}

@@ -3,6 +3,15 @@ import fs from "fs";
 
 const pkg = JSON.parse(fs.readFileSync("package.json"));
 
+await esbuild.build({
+  entryPoints: ["support/local-bridge/index.ts"],
+  bundle: true,
+  platform: "node",
+  target: "node22",
+  format: "esm",
+  outfile: "dist/support/local-bridge/index.mjs",
+});
+
 // support/nodejs-runtime
 await esbuild.build({
   entryPoints: ["support/nodejs-runtime/index.ts"],
