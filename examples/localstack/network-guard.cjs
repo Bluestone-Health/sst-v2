@@ -1,5 +1,6 @@
 // Verification-only: fail any Node HTTP/SDK/fetch request outside this machine.
 const fs = require("node:fs");
+const { urlToHttpOptions } = require("node:url");
 function check(url) {
   const host = url.hostname;
   if (
@@ -16,15 +17,20 @@ for (const protocol of ["http", "https"]) {
   const module = require(`node:${protocol}`);
   const request = module.request;
   module.request = function (input, ...args) {
-    const url =
-      typeof input === "string" || input instanceof URL
-        ? new URL(input)
-        : new URL(
-            `${protocol}://${input.hostname || input.host || "localhost"}${
-              input.port ? `:${input.port}` : ""
-            }`
-          );
-    check(url);
+    const options = {
+      ...(typeof input === "string" || input instanceof URL
+        ? urlToHttpOptions(new URL(input))
+        : input),
+      ...(typeof args[0] === "object" ? args[0] : {}),
+    };
+    const host = options.hostname || options.host || "localhost";
+    check(
+      new URL(
+        `${protocol}://${
+          host.includes(":") && !host.startsWith("[") ? `[${host}]` : host
+        }${options.port ? `:${options.port}` : ""}`
+      )
+    );
     return request.call(this, input, ...args);
   };
   module.get = function (...args) {
@@ -40,5 +46,6 @@ globalThis.fetch = function (input, ...args) {
       typeof input === "string" || input instanceof URL ? input : input.url
     )
   );
-  return fetch.call(this, input, ...args);
+  // Verification rejects redirects so a local response cannot send fetch off-host.
+  return fetch.call(this, input, { ...args[0], redirect: "error" });
 };

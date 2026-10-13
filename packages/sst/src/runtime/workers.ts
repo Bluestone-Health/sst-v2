@@ -64,32 +64,46 @@ export const useRuntimeWorkers = lazy(async () => {
     if (!props) return;
     const handler = handlers.for(props.runtime!);
     if (!handler) return;
-    const build = await builder.artifact(evt.properties.functionID);
-    if (!build || evt.properties.signal?.aborted) {
+    try {
+      const build = await builder.artifact(evt.properties.functionID);
+      if (!build || evt.properties.signal?.aborted) {
+        lastRequestId.delete(evt.properties.workerID);
+        return;
+      }
+      await handler.startWorker({
+        ...build,
+        workerID: evt.properties.workerID,
+        functionID: evt.properties.functionID,
+        environment: evt.properties.env,
+        url: `${server.url}/${evt.properties.workerID}/${server.API_VERSION}`,
+        runtime: props.runtime!,
+      });
+      if (evt.properties.signal?.aborted) {
+        await handler.stopWorker(evt.properties.workerID);
+        lastRequestId.delete(evt.properties.workerID);
+        return;
+      }
+      workers.set(evt.properties.workerID, {
+        workerID: evt.properties.workerID,
+        functionID: evt.properties.functionID,
+      });
+      bus.publish("worker.started", {
+        workerID: evt.properties.workerID,
+        functionID: evt.properties.functionID,
+      });
+    } catch (error) {
+      if (!evt.properties.signal) throw error;
       lastRequestId.delete(evt.properties.workerID);
-      return;
+      if (evt.properties.signal.aborted) return;
+      bus.publish("function.error", {
+        functionID: evt.properties.functionID,
+        workerID: evt.properties.workerID,
+        requestID: evt.properties.requestID,
+        errorType: "WorkerStartError",
+        errorMessage: String(error),
+        trace: error instanceof Error ? error.stack?.split("\n") || [] : [],
+      });
     }
-    await handler.startWorker({
-      ...build,
-      workerID: evt.properties.workerID,
-      functionID: evt.properties.functionID,
-      environment: evt.properties.env,
-      url: `${server.url}/${evt.properties.workerID}/${server.API_VERSION}`,
-      runtime: props.runtime!,
-    });
-    if (evt.properties.signal?.aborted) {
-      await handler.stopWorker(evt.properties.workerID);
-      lastRequestId.delete(evt.properties.workerID);
-      return;
-    }
-    workers.set(evt.properties.workerID, {
-      workerID: evt.properties.workerID,
-      functionID: evt.properties.functionID,
-    });
-    bus.publish("worker.started", {
-      workerID: evt.properties.workerID,
-      functionID: evt.properties.functionID,
-    });
   });
 
   return {
