@@ -149,6 +149,20 @@ test("local bridge isolates real invocations, failures, deadlines and reloads", 
     );
     expect((await invoke({ exit: true })).status).toBe(502);
     expect((await invoke({ marker: "after-timeout" })).status).toBe(200);
+    for (const stage of ["build", "start", "stop"]) {
+      const reply = await invoke({ failWorker: stage });
+      expect(reply.status).toBe(502);
+      expect(reply.body.errorType).toBe(
+        stage === "stop" ? "WorkerStopError" : "WorkerStartError"
+      );
+      expect(reply.body.errorMessage).toContain(`probe ${stage} failure`);
+      expect((await invoke({ marker: `after-${stage}-failure` })).status).toBe(
+        200
+      );
+    }
+    const checked = once(child, "message");
+    child.send("check-unhandled");
+    expect((await checked)[0]).toEqual({ unhandled: [] });
     for (const pauseStartup of ["build", "start"]) {
       const marker = path.join(root, `${pauseStartup}-executed`);
       expect(
