@@ -95,6 +95,11 @@ export async function runLocal() {
     bus.subscribe("function.error", ({ properties: p }) =>
       console.error(`[${local.id} ${p.requestID}] ${p.errorMessage}`)
     );
+    await fs.writeFile(
+      path.join(project.paths.out, "bridge.json"),
+      JSON.stringify({ port: local.port }),
+      { mode: 0o600 }
+    );
     await startLocalBridge({
       host: "0.0.0.0",
       port: local.port,

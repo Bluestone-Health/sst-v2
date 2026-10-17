@@ -105,6 +105,14 @@ test("local bridge isolates real invocations, failures, deadlines and reloads", 
       };
     };
     expect((await invoke({}, {}, "wrong")).status).toBe(401);
+    const dataApi = (key: string) =>
+      fetch(`http://127.0.0.1:${port}/rds-data/${key}/Unknown`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+    expect((await dataApi("wrong")).status).toBe(401);
+    expect((await dataApi(token)).status).toBe(404);
     expect((await invoke({}, { functionID: "missing" })).status).toBe(400);
     expect((await invoke({}, { functionID: "unsupported" })).status).toBe(400);
     expect((await invoke({}, { deadline: -1 })).status).toBe(400);

@@ -62,11 +62,27 @@ export const bind = (program: Program) =>
           import("../../constructs/util/binding.js"),
         ]);
 
-        const { useLocal, localEnvironment } = await import("../../local.js");
+        const { useLocal, configureLocal, localEnvironment } = await import(
+          "../../local.js"
+        );
         if (useLocal()) {
           const { Config } = await import("../../config.js");
           const fs = await import("fs/promises");
           const project = useProject();
+          const bridge = JSON.parse(
+            await fs.readFile(
+              path.join(project.paths.out, "bridge.json"),
+              "utf8"
+            )
+          );
+          configureLocal({
+            ...useLocal()!,
+            port: bridge.port,
+            token: await fs.readFile(
+              path.join(project.paths.out, "bridge-token"),
+              "utf8"
+            ),
+          });
           const sites = JSON.parse(
             await fs
               .readFile(path.join(project.paths.out, "sites.json"), "utf8")
