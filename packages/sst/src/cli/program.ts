@@ -5,7 +5,7 @@ export const program = yargs(hideBin(process.argv))
   .scriptName("sst")
   .option("local", {
     type: "boolean",
-    describe: "Use LocalStack for bind or secrets",
+    describe: "Use LocalStack for dev, bind or secrets",
   })
   .option("env", { type: "string", describe: "Local environment ID" })
   .option("endpoint", { type: "string", describe: "LocalStack endpoint" })
@@ -43,10 +43,12 @@ export const program = yargs(hideBin(process.argv))
       if (argv._[0] === "local" || argv.local) {
         if (
           argv.local &&
-          !["bind", "env", "secrets", "local"].includes(String(argv._[0]))
+          !["dev", "start", "bind", "env", "secrets", "local"].includes(
+            String(argv._[0])
+          )
         )
           throw new Error(
-            "--local is supported only by bind and secrets; use sst local to deploy locally."
+            "--local is supported only by dev, bind and secrets."
           );
         if (!argv.env || !argv.endpoint)
           throw new Error("Local commands require --env and --endpoint.");
