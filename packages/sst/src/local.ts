@@ -9,6 +9,13 @@ interface LocalOptions {
 let local: LocalOptions | undefined;
 export const useLocal = () => local;
 
+export function localDataApiEndpoint(docker = false) {
+  if (!local?.token) return undefined;
+  return `http://${docker ? "host.docker.internal" : "127.0.0.1"}:${
+    local.port
+  }/rds-data/${local.token}`;
+}
+
 export function configureLocal(options: LocalOptions) {
   const endpoint = new URL(options.endpoint);
   if (!/^[a-z][a-z0-9-]{0,31}$/.test(options.id))
@@ -68,6 +75,9 @@ export function localEnvironment(input: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return Object.assign(env, {
     SST_TELEMETRY_DISABLED: "1",
     AWS_ENDPOINT_URL: useLocal()!.endpoint,
+    ...(localDataApiEndpoint()
+      ? { AWS_ENDPOINT_URL_RDS_DATA: localDataApiEndpoint() }
+      : {}),
     AWS_ENDPOINT_URL_S3: `http://s3.localhost.localstack.cloud:${
       new URL(useLocal()!.endpoint).port || "80"
     }`,

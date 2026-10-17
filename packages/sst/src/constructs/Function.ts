@@ -27,7 +27,7 @@ import * as functionUrlCors from "./util/functionUrlCors.js";
 import url from "url";
 import { useDeferredTasks } from "./deferred_task.js";
 import { useProject } from "../project.js";
-import { useLocal } from "../local.js";
+import { useLocal, localDataApiEndpoint } from "../local.js";
 import { VisibleError } from "../error.js";
 import { useRuntimeHandlers } from "../runtime/handlers.js";
 import { createAppContext } from "./context.js";
@@ -1166,13 +1166,20 @@ export class Function extends CDKFunction implements SSTConstruct {
     if (useLocal() && !isLiveDevEnabled) {
       this.addEnvironment(
         "AWS_ENDPOINT_URL",
-        `http://host.docker.internal:${new URL(useLocal()!.endpoint).port || "80"}`
+        `http://host.docker.internal:${
+          new URL(useLocal()!.endpoint).port || "80"
+        }`
       );
       // S3 virtual-host bucket names must resolve inside LocalStack's Lambda network.
       this.addEnvironment(
         "AWS_ENDPOINT_URL_S3",
         "http://s3.localhost.localstack.cloud:4566"
       );
+      if (localDataApiEndpoint(true))
+        this.addEnvironment(
+          "AWS_ENDPOINT_URL_RDS_DATA",
+          localDataApiEndpoint(true)!
+        );
     }
 
     // Add config

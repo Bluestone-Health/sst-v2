@@ -45,6 +45,7 @@ test("host bindings discard credential and endpoint overrides", () => {
     id: "scheduler",
     endpoint: "http://127.0.0.1:4569",
     port: 13561,
+    token: "local-test-token-with-more-than-32-characters",
   });
   const env = localEnvironment({
     AWS_PROFILE: "production",
@@ -64,6 +65,9 @@ test("host bindings discard credential and endpoint overrides", () => {
   expect(env.SST_RDSv2_clusterArn_Database).toBe("local-cluster");
   expect(env.SST_LOCAL_BRIDGE_TOKEN).toBeUndefined();
   expect(env.AWS_ENDPOINT_URL_DYNAMODB).toBeUndefined();
+  expect(env.AWS_ENDPOINT_URL_RDS_DATA).toBe(
+    "http://127.0.0.1:13561/rds-data/local-test-token-with-more-than-32-characters"
+  );
   expect(env.AWS_ACCESS_KEY_ID).toBe("test");
   expect(env.AWS_IGNORE_CONFIGURED_ENDPOINT_URLS).toBe("false");
   expect(env.SST_Queue_queueUrl_Work).toBe(

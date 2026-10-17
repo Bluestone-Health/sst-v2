@@ -105,6 +105,17 @@ test("local bind rejects inherited secrets and binds only local site values", as
       path.join(root, "sst.config.mjs"),
       'export default {config(){return {name:"review",region:"us-east-1"}},stacks(){}}'
     );
+    const out = path.join(root, ".sst/local/review");
+    const bridgeToken = "local-bind-token-with-more-than-32-characters";
+    const dataEndpoint = `http://127.0.0.1:13573/rds-data/${bridgeToken}`;
+    await mkdir(out, { recursive: true });
+    await writeFile(
+      path.join(out, "bridge.json"),
+      JSON.stringify({ port: 13573 })
+    );
+    await writeFile(path.join(out, "bridge-token"), bridgeToken, {
+      mode: 0o600,
+    });
     const missing = `import assert from 'node:assert/strict';
       import {Config} from ${JSON.stringify(
         new URL("node/config/index.js", `file://${dist}`).href
@@ -133,13 +144,15 @@ test("local bind rejects inherited secrets and binds only local site values", as
       )};
       assert.equal(Config.REVIEW_SENTINEL, 'synthetic-local-secret');
       assert.equal(Table.Records.tableName, 'local-table');
+      assert.equal(process.env.AWS_ENDPOINT_URL_RDS_DATA, ${JSON.stringify(
+        dataEndpoint
+      )});
       console.log('local script bindings passed');`
     );
     expect(scriptResult.code, scriptResult.output).toBe(0);
     expect(scriptResult.output).toContain("local script bindings passed");
     const site = path.join(root, "site");
     await mkdir(site);
-    const out = path.join(root, ".sst/local/review");
     await writeFile(
       path.join(out, "sites.json"),
       JSON.stringify({ [site]: "local-site" })
@@ -159,6 +172,9 @@ test("local bind rejects inherited secrets and binds only local site values", as
       assert.equal(process.env.SITE_URL, 'http://localhost:3000');
       assert.equal(process.env.AWS_ENDPOINT_URL, ${JSON.stringify(endpoint)});
       assert.equal(process.env.AWS_ACCESS_KEY_ID, 'test');
+      assert.equal(process.env.AWS_ENDPOINT_URL_RDS_DATA, ${JSON.stringify(
+        dataEndpoint
+      )});
       console.log('local site bindings passed');`
     );
     expect(result.code, result.output).toBe(0);

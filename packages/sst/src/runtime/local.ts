@@ -7,6 +7,8 @@ import { useFunctionBuilder, useRuntimeHandlers } from "./handlers.js";
 import { startRuntimeServer } from "./server.js";
 import type {} from "./runtime.js";
 import { useLocal, localEnvironment } from "../local.js";
+import { localDataApi } from "./local-data-api.js";
+import { useProject } from "../project.js";
 
 const invocation = z.object({
   functionID: z.string().min(1),
@@ -41,7 +43,11 @@ export async function startLocalBridge(options: {
   const handlers = useRuntimeHandlers();
   const app = express();
   app.use((req, res, next) => {
-    const provided = Buffer.from(req.headers.authorization || "");
+    const provided = Buffer.from(
+      req.path.startsWith("/rds-data/")
+        ? `Bearer ${req.path.split("/")[2]}`
+        : req.headers.authorization || ""
+    );
     if (
       provided.length !== expected.length ||
       !timingSafeEqual(provided, expected)
@@ -51,6 +57,15 @@ export async function startLocalBridge(options: {
     }
     next();
   });
+  if (useLocal())
+    app.post(
+      "/rds-data/:token/:action",
+      express.json({ limit: "4mb" }),
+      localDataApi({
+        endpoint: useLocal()!.endpoint,
+        region: useProject().config.region!,
+      })
+    );
   app.post("/invoke", express.json({ limit: "6mb" }), async (req, res) => {
     const parsed = invocation.safeParse(req.body);
     if (!parsed.success) {

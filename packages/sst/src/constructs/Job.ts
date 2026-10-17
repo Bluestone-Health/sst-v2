@@ -1,4 +1,4 @@
-import { useLocal } from "../local.js";
+import { useLocal, localDataApiEndpoint } from "../local.js";
 import url from "url";
 import path from "path";
 import fs from "fs/promises";
@@ -421,6 +421,10 @@ export class Job extends Construct implements SSTConstruct {
       }`;
       for (const [key, value] of Object.entries({
         AWS_ENDPOINT_URL: endpoint,
+        AWS_ENDPOINT_URL_S3: "http://s3.localhost.localstack.cloud:4566",
+        ...(localDataApiEndpoint(true)
+          ? { AWS_ENDPOINT_URL_RDS_DATA: localDataApiEndpoint(true)! }
+          : {}),
         AWS_ACCESS_KEY_ID: "test",
         AWS_SECRET_ACCESS_KEY: "test",
         AWS_EC2_METADATA_DISABLED: "true",
