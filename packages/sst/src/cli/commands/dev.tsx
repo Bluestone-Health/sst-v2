@@ -12,6 +12,10 @@ export const dev = (program: Program) =>
         description: "Increase function timeout",
       }),
     async (args) => {
+      if (args.local) {
+        const { runLocal } = await import("./local.js");
+        return runLocal();
+      }
       const { Logger } = await import("../../logger.js");
       const { Colors } = await import("../colors.js");
       const { printHeader } = await import("../ui/header.js");
