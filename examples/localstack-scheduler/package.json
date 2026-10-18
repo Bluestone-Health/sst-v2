@@ -1,0 +1,15 @@
+{
+  "name": "sst-localstack-scheduler-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "local": "sst local",
+    "smoke": "node smoke.mjs"
+  },
+  "dependencies": {
+    "sst": "link:../../packages/sst/dist",
+    "aws-cdk-lib": "link:../../packages/sst/node_modules/aws-cdk-lib",
+    "constructs": "link:../../packages/sst/node_modules/constructs",
+    "aws-sdk": "2.1692.0"
+  }
+}
