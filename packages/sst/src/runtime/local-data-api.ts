@@ -61,6 +61,19 @@ export function rewriteTextCasts(sql: string) {
   return { sql, aliases };
 }
 
+/** Preserve DO bodies while avoiding LocalStack's splitting at inner semicolons. */
+export function rewriteDoBlock(sql: string) {
+  // shortcut: one dollar-quoted DO block only; remove when the emulator handles it.
+  const block =
+    /^\s*[dD][oO]\s+(\$(?:[a-zA-Z_]\w*)?\$)([\s\S]*?)\1\s*;?\s*$/.exec(sql);
+  if (!block || block[2].includes(block[1])) return sql;
+  const body = block[2]
+    .replaceAll("\\", "\\\\")
+    .replaceAll("'", "''")
+    .replaceAll(";", "\\073");
+  return `DO E'${body}'`;
+}
+
 export function localDataApi(options: { endpoint: string; region: string }) {
   const endpoint = new URL(options.endpoint);
   const signer = new SignatureV4({
@@ -89,7 +102,7 @@ export function localDataApi(options: { endpoint: string; region: string }) {
       req.params.action === "Execute" &&
       req.body.formatRecordsAs !== "JSON" &&
       typeof req.body.sql === "string"
-        ? rewriteTextCasts(req.body.sql)
+        ? rewriteTextCasts(rewriteDoBlock(req.body.sql))
         : undefined;
     try {
       const signed = await signer.sign({

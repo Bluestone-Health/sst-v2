@@ -154,6 +154,14 @@ that gap was fixed. The final runs used the local substitute. SST build and
 the full SST suite passed: 1,042 tests across 43 files. Real external integrations
 and every Scheduler business flow were not validated.
 
+Local Data API compatibility also encodes a single dollar-quoted PostgreSQL
+`DO` body as an equivalent escape string to avoid LocalStack splitting it at
+inner semicolons. Scheduler's historical migrations remain unchanged, including
+the orphan-tag guard and transaction rollback. Multiple statements and other
+procedural forms pass through unchanged. The original migration passed both
+its success and orphan rollback paths through the bridge in isolated,
+always-rolled-back local transactions.
+
 LocalStack documentation: [API Gateway](https://docs.localstack.cloud/aws/services/apigateway/),
 [CodeBuild](https://docs.localstack.cloud/aws/services/codebuild/),
 [Scheduler limitations](https://docs.localstack.cloud/aws/services/scheduler/#current-limitations),

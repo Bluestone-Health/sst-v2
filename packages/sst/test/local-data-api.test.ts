@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import {
   rewriteTextCasts,
+  rewriteDoBlock,
   localDataApi,
 } from "../dist/runtime/local-data-api.js";
 import express from "express";
@@ -132,6 +133,14 @@ test("local Data API preserves SDK records, transaction payloads and upstream fa
       name: "BadRequestException",
       message: "bad query",
     });
+    await client.send(
+      new ExecuteStatementCommand({
+        ...input,
+        sql: "DO $$ BEGIN PERFORM 1; END $$;",
+      })
+    );
+    expect(received.sql).toBe(String.raw`DO E' BEGIN PERFORM 1\073 END '`);
+    expect(received.transactionId).toBe(input.transactionId);
     for (const action of [
       "BatchExecute",
       "BeginTransaction",
@@ -163,4 +172,27 @@ test("local Data API preserves escaped identifiers and avoids alias collisions",
   );
   expect(query.aliases).toEqual({ sst_local_text_1: 'a"b' });
   expect(query.sql).toContain('"a""b"::text as "sst_local_text_1"');
+});
+
+test("local Data API encodes a complete dollar-quoted DO block without changing its body", () => {
+  const sql = String.raw`DO $guard$ BEGIN RAISE EXCEPTION 'can''t; use \\ paths'; END $guard$;`;
+  expect(rewriteDoBlock(sql)).toBe(
+    String.raw`DO E' BEGIN RAISE EXCEPTION ''can''''t\073 use \\\\ paths''\073 END '`
+  );
+  expect(rewriteDoBlock("DO $$ BEGIN PERFORM 1; END $$;")).toBe(
+    String.raw`DO E' BEGIN PERFORM 1\073 END '`
+  );
+});
+
+test("local Data API leaves unsupported procedural and multiple statements unchanged", () => {
+  for (const sql of [
+    "select 1; select 2",
+    "DO 'BEGIN PERFORM 1; END'",
+    "DO $$ BEGIN PERFORM 1; END $other$;",
+    "DO $lower$ BEGIN PERFORM 1; END $LOWER$;",
+    "DO $$ BEGIN PERFORM 1; END $$; DO $$ BEGIN PERFORM 2; END $$;",
+    "DO $$ BEGIN PERFORM 1; END $$; select 2",
+    "-- DO $$ BEGIN PERFORM 1; END $$;",
+  ])
+    expect(rewriteDoBlock(sql)).toBe(sql);
 });
