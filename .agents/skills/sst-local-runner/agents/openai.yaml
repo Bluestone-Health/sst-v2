@@ -1,0 +1,3 @@
+interface:
+  display_name: "SST local runner"
+  short_description: "Run and debug SST with Docker LocalStack"
