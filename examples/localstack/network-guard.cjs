@@ -49,3 +49,30 @@ globalThis.fetch = function (input, ...args) {
   // Verification rejects redirects so a local response cannot send fetch off-host.
   return fetch.call(this, input, { ...args[0], redirect: "error" });
 };
+
+// SST workers supply their own env/execArgv, so they do not inherit this preload.
+const threads = require("node:worker_threads");
+const Worker = threads.Worker;
+threads.Worker = class extends Worker {
+  constructor(file, options = {}) {
+    super(file, {
+      ...options,
+      execArgv: [
+        ...(options.execArgv ?? process.execArgv),
+        "--require",
+        __filename,
+      ],
+      ...(options.env &&
+      typeof options.env === "object" &&
+      process.env.SST_LOCAL_NETWORK_LOG
+        ? {
+            env: {
+              ...options.env,
+              SST_LOCAL_NETWORK_LOG: process.env.SST_LOCAL_NETWORK_LOG,
+            },
+          }
+        : {}),
+    });
+  }
+};
+require("node:module").syncBuiltinESMExports();

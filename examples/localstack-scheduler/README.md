@@ -31,7 +31,7 @@ docker compose -f ../localstack/compose.yaml -f compose.yaml up -d --wait
 pnpm exec sst secrets load secrets.example.env \
   --local --env scheduler --endpoint http://127.0.0.1:4569
 
-pnpm exec sst local --env scheduler \
+pnpm exec sst dev --local --env scheduler \
   --endpoint http://127.0.0.1:4569 --port 13561
 ```
 
@@ -72,7 +72,7 @@ the AWS-backed `sst dev` workflow.
 
 1. Link this fork's built `packages/sst/dist`. Share its `aws-cdk-lib` and
    `constructs` installations when using symlinks, as this example does.
-2. Use `sst local --env scheduler --endpoint ... --port ...` for infrastructure.
+2. Use `sst dev --local --env scheduler --endpoint ... --port ...` for local infrastructure and live workers (`sst local` is an equivalent entry point).
    The stage is `local-scheduler`; Scheduler already treats that as a dev stage.
 3. Configure application API URLs from `api.url`/`api.customDomainUrl`. In local
    mode those point to LocalStack, while the API domain construct remains
@@ -98,11 +98,19 @@ the AWS-backed `sst dev` workflow.
 ### Execution differences
 
 - Live Node Lambdas retain host breakpoints and source watching.
+- Data API calls from live workers, bound commands, packaged Lambdas and Jobs
+  use SST's authenticated local bridge. It works around the pinned emulator's
+  duplicate-column and incorrect date metadata errors for simple, quoted
+  `column::text AS column` projections. SQL containing literals, comments,
+  nested queries or references to the cast alias in ordering/grouping passes
+  through unchanged, as does JSON result mode. This is a narrow compatibility
+  fix, not a general SQL translator. Start `sst dev --local` before `sst bind
+  --local`; bind reads that environment's bridge connection automatically.
 - `Script` handlers with live development disabled are packaged and executed
   by LocalStack Lambda, including deployment callbacks.
 - Jobs use the existing CodeBuild deployment path, with their configured
   runtime and timeout, rather than SST's ten-second live-dev Lambda wrapper.
-  Re-run `sst local` after changing Job code; host Lambda breakpoints do not
+  Restart `sst dev --local` after changing Job code; host Lambda breakpoints do not
   apply to CodeBuild containers.
   LocalStack returns HTTP 501 for `StopBuild`: **Job cancellation is currently
   unavailable**. Scheduler has no `Job.cancel` callers. The smoke check records
@@ -120,12 +128,39 @@ resource validation: 96 API routes, 213 Lambda resources, 22 queues, 10 DynamoDB
 tables, eight schedules, and the database/site/supporting resources. This is
 synthesis evidence, not proof that all Scheduler business flows work locally.
 
-The expanded fixture deployment, smoke check, and local site-binding check passed
-on the pinned image with Node 22.23.0 and OrbStack. SST build and all 1,034 tests
+The earlier expanded fixture deployment, smoke check, and local site-binding
+check passed on the pinned image with Node 22.23.0 and OrbStack. SST build and all 1,034 tests
 (39 files) passed. No real AWS deployment or full Scheduler business-flow test
 was performed. On the first cold CodeBuild image start, LocalStack logged a
 build-monitor race even though the handler completed; the smoke check verifies
 the handler's database result directly.
+
+A fresh Scheduler clone at `0f2717fd` also ran with `sst dev --local`: all 30
+application stacks provisioned, 67 database tables migrated, API health and
+webhook rejection checks passed, and Internal Portal/Census browser sign-in
+worked with real database sessions. A synthetic claim passed S3 notifications,
+SQS, Lambda consumers and a CodeBuild Job, writing one claim to PostgreSQL.
+The Census browser uploader also passed through intake/distribution workers to
+an application-owned local Drive substitute, with exact file bytes saved on
+disk and notification email captured in local SES.
+The clone needed local URLs/test credentials, Sentry disabled, an explicit
+receipt-rule dependency, and an equivalent application-side migration guard
+to avoid LocalStack's unsupported procedural SQL parsing. Census additionally
+needed local S3 origins in its CSP and a local Drive client endpoint. The
+verification guard now propagates into SST worker threads; an earlier attempt
+reached Google's authentication endpoint with synthetic credentials before
+that gap was fixed. The final runs used the local substitute. SST build and
+151 targeted tests passed for that run. After stacking these fixes on PR #20,
+the full SST suite passed: 1,042 tests across 43 files. Real external integrations
+and every Scheduler business flow were not validated.
+
+Local Data API compatibility also encodes a single dollar-quoted PostgreSQL
+`DO` body as an equivalent escape string to avoid LocalStack splitting it at
+inner semicolons. Scheduler's historical migrations remain unchanged, including
+the orphan-tag guard and transaction rollback. Multiple statements and other
+procedural forms pass through unchanged. The original migration passed both
+its success and orphan rollback paths through the bridge in isolated,
+always-rolled-back local transactions.
 
 LocalStack documentation: [API Gateway](https://docs.localstack.cloud/aws/services/apigateway/),
 [CodeBuild](https://docs.localstack.cloud/aws/services/codebuild/),

@@ -48,6 +48,19 @@ test("local constructs retain API domains without DNS lookups, package Scripts, 
   });
   template.hasResourceProperties("AWS::CodeBuild::Project", {
     TimeoutInMinutes: 60,
+    Environment: {
+      EnvironmentVariables: Match.arrayWith([
+        Match.objectLike({
+          Name: "AWS_ENDPOINT_URL_S3",
+          Value: "http://s3.localhost.localstack.cloud:4566",
+        }),
+        Match.objectLike({
+          Name: "AWS_ENDPOINT_URL_RDS_DATA",
+          Value:
+            "http://host.docker.internal:13561/rds-data/local-test-token-with-more-than-32-characters",
+        }),
+      ]),
+    },
   });
   expect(api.url).toContain(".execute-api.localhost.localstack.cloud:4569");
   expect(api.customDomainUrl).toBe(api.url);

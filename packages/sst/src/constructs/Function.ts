@@ -27,7 +27,7 @@ import * as functionUrlCors from "./util/functionUrlCors.js";
 import url from "url";
 import { useDeferredTasks } from "./deferred_task.js";
 import { useProject } from "../project.js";
-import { useLocal } from "../local.js";
+import { useLocal, localDataApiEndpoint } from "../local.js";
 import { VisibleError } from "../error.js";
 import { useRuntimeHandlers } from "../runtime/handlers.js";
 import { createAppContext } from "./context.js";
@@ -1163,8 +1163,19 @@ export class Function extends CDKFunction implements SSTConstruct {
 
     this.attachPermissions(props.permissions || []);
 
-    if (useLocal() && !isLiveDevEnabled)
-      this.addEnvironment("AWS_ENDPOINT_URL", `http://host.docker.internal:${new URL(useLocal()!.endpoint).port || "80"}`);
+    if (useLocal() && !isLiveDevEnabled) {
+      this.addEnvironment(
+        "AWS_ENDPOINT_URL",
+        `http://host.docker.internal:${
+          new URL(useLocal()!.endpoint).port || "80"
+        }`
+      );
+      if (localDataApiEndpoint(true))
+        this.addEnvironment(
+          "AWS_ENDPOINT_URL_RDS_DATA",
+          localDataApiEndpoint(true)!
+        );
+    }
 
     // Add config
     this.addEnvironment("SST_APP", app.name, { removeInEdge: true });
