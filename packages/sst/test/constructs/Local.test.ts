@@ -162,3 +162,33 @@ test.each([false, true])(
     ).toThrow(/Local mode does not support.*WebSocket/);
   }
 );
+
+test.each([true, false])(
+  "local Functions and Jobs omit retention helpers (live=%s)",
+  async (enableLiveDev) => {
+    configureLocal({
+      id: "retention",
+      endpoint: "http://127.0.0.1:4569",
+      port: 13561,
+    });
+    const app = await createApp({ mode: "dev" });
+    app.setDefaultFunctionProps({ logRetention: "one_day" });
+    const stack = new Stack(app, "stack");
+    new Function(stack, "Explicit", {
+      handler: "test/lambda.handler",
+      logRetention: "one_week",
+      enableLiveDev,
+    });
+    new Function(stack, "Inherited", {
+      handler: "test/lambda.handler",
+      enableLiveDev,
+    });
+    new Job(stack, "Ingest", {
+      handler: "test/lambda.handler",
+      logRetention: "one_week",
+    });
+    const template = Template.fromStack(stack);
+    template.resourceCountIs("Custom::LogRetention", 0);
+    template.resourceCountIs("AWS::Lambda::Function", 4);
+  }
+);

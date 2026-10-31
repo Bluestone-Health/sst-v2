@@ -560,7 +560,7 @@ export class Job extends Construct implements SSTConstruct {
 
   private createLogRetention() {
     const { logRetention } = this.props;
-    if (!logRetention) return;
+    if (useLocal() || !logRetention) return;
 
     new LogRetention(this, "LogRetention", {
       logGroupName: `/aws/codebuild/${this.job.projectName}`,

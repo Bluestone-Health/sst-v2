@@ -901,11 +901,12 @@ export class Function extends CDKFunction implements SSTConstruct {
       Tracing[
         (props.tracing || "active").toUpperCase() as keyof typeof Tracing
       ];
-    const logRetention =
-      props.logRetention &&
-      RetentionDays[
-        props.logRetention.toUpperCase() as keyof typeof RetentionDays
-      ];
+    const logRetention = useLocal()
+      ? undefined
+      : props.logRetention &&
+        RetentionDays[
+          props.logRetention.toUpperCase() as keyof typeof RetentionDays
+        ];
     const isLiveDevEnabled =
       app.mode === "dev" && (props.enableLiveDev === false ? false : true);
     if (useLocal() && !props.runtime.startsWith("nodejs"))

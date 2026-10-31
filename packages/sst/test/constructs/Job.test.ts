@@ -491,3 +491,10 @@ test("addEnvironment()", async () => {
     },
   });
 });
+
+test("logRetention: AWS Jobs retain the configured policy", async () => {
+  const { stack } = await createJob({ logRetention: "one_week" });
+  hasResource(stack, "Custom::LogRetention", {
+    RetentionInDays: 7,
+  });
+});
