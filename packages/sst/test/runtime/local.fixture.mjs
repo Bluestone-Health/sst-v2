@@ -35,6 +35,32 @@ useFunctions().add("unsupported", {
 useBus().subscribe("function.build.failed", (event) =>
   console.error(event.properties.errors)
 );
+const unhandled = [];
+process.on("unhandledRejection", (error) => unhandled.push(String(error)));
+process.on("message", (message) => {
+  if (message === "check-unhandled") process.send({ unhandled });
+});
+// Fault-injected startup/termination failures must leave the session usable.
+useBus().subscribe("function.invoked", ({ properties }) => {
+  const stage = properties.event.failWorker;
+  if (!stage) return;
+  const target =
+    stage === "build"
+      ? useFunctionBuilder()
+      : useRuntimeHandlers().for("nodejs22.x");
+  const key =
+    stage === "build"
+      ? "artifact"
+      : stage === "start"
+      ? "startWorker"
+      : "stopWorker";
+  const original = target[key];
+  target[key] = async (...args) => {
+    target[key] = original;
+    if (stage === "stop") await original(...args);
+    throw new Error(`probe ${stage} failure`);
+  };
+});
 // Hold startup across the HTTP deadline, then let the real build/worker proceed.
 useBus().subscribe("function.invoked", ({ properties }) => {
   const stage = properties.event.pauseStartup;

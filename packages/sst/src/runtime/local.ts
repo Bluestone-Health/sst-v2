@@ -111,7 +111,12 @@ export async function startLocalBridge(options: {
       clearTimeout(timer);
       subscriptions.forEach((sub) => bus.unsubscribe(sub));
       controller.abort();
-      await handler.stopWorker(workerID);
+      try {
+        await handler.stopWorker(workerID);
+      } catch (error) {
+        status = 502;
+        body = { errorType: "WorkerStopError", errorMessage: String(error) };
+      }
       if (!res.destroyed) res.status(status).json(body);
     }
 

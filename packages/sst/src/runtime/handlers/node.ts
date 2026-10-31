@@ -69,6 +69,7 @@ export const useNodeHandler = (): RuntimeHandler => {
         workers.stdout(input.workerID, error.stack || error.message)
       );
       worker.on("exit", () => {
+        if (threads.get(input.workerID) !== worker) return;
         threads.delete(input.workerID);
         workers.exited(input.workerID);
       });
