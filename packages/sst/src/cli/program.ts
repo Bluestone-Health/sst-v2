@@ -36,10 +36,24 @@ export const program = yargs(hideBin(process.argv))
   })
   .group(["stage", "profile", "region", "role", "verbose", "help"], "Global:")
   .middleware(async (argv) => {
+    if (Array.isArray(argv.sstBindCommand)) {
+      argv.command = argv.sstBindCommand;
+      delete argv.sstBindCommand;
+    }
     if (argv.verbose) {
       process.env.SST_VERBOSE = "1";
     }
     if (argv._.length > 0) {
+      if (
+        argv._[0] !== "local" &&
+        !argv.local &&
+        [argv.env, argv.endpoint, argv.port].some(
+          (value) => value !== undefined
+        )
+      )
+        throw new Error(
+          "--env, --endpoint, and --port require --local or the sst local command."
+        );
       if (argv._[0] === "local" || argv.local) {
         if (
           argv.local &&
@@ -73,7 +87,7 @@ export const program = yargs(hideBin(process.argv))
   .recommendCommands()
   .demandCommand()
   .strict()
-  .fail(async (_, error, yargs) => {
+  .fail((_, error, yargs) => {
     if (!error) {
       yargs.showHelp();
       process.exit(1);
@@ -82,6 +96,46 @@ export const program = yargs(hideBin(process.argv))
   });
 
 export type Program = typeof program;
+
+export function parse(args = hideBin(process.argv)) {
+  const options = (
+    program as Program & {
+      getOptions(): { string: string[]; number: string[]; boolean: string[] };
+    }
+  ).getOptions();
+  let command: string | undefined;
+  for (let index = 0; index < args.length; index++) {
+    const value = args[index];
+    if (value === "--" && command) {
+      return program.parseAsync(
+        [...args.slice(0, index), ...args.slice(index + 1, index + 2)],
+        { sstBindCommand: args.slice(index + 1) }
+      );
+    }
+    if (value.startsWith("-")) {
+      const key = value.replace(/^-+/, "").split("=")[0];
+      if (
+        !value.includes("=") &&
+        (options.string.includes(key) ||
+          options.number.includes(key) ||
+          ((options.boolean.includes(key) || (command && key === "script")) &&
+            ["true", "false"].includes(args[index + 1])))
+      )
+        index++;
+      continue;
+    }
+    if (!command) {
+      if (!["bind", "env"].includes(value)) break;
+      command = value;
+      continue;
+    }
+    // Give yargs only SST's flags; bind owns every token after the child command.
+    return program.parseAsync(args.slice(0, index + 1), {
+      sstBindCommand: args.slice(index),
+    });
+  }
+  return program.parseAsync(args);
+}
 
 const startAt = Date.now();
 

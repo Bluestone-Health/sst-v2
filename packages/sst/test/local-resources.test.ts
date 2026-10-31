@@ -70,3 +70,23 @@ test("host bindings discard credential and endpoint overrides", () => {
     "http://127.0.0.1:4569/000000000000/work.fifo"
   );
 });
+
+test("local assembly rejects WebSocket APIs but accepts HTTP APIs", () => {
+  const api = (protocol: string) => [
+    {
+      stackName: "ApiStack",
+      template: {
+        Resources: {
+          Api: {
+            Type: "AWS::ApiGatewayV2::Api",
+            Properties: { ProtocolType: protocol },
+          },
+        },
+      },
+    },
+  ];
+  expect(() => validateLocalAssembly(api("HTTP"))).not.toThrow();
+  expect(() => validateLocalAssembly(api("WEBSOCKET"))).toThrow(
+    /Local mode does not support.*WebSocket.*ApiStack\/Api/
+  );
+});

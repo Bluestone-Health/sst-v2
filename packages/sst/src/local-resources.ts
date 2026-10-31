@@ -97,6 +97,13 @@ export function validateLocalAssembly(
           `Local mode does not support ${resource.Type} (${stack.stackName}/${id}).`
         );
       if (
+        resource.Type === "AWS::ApiGatewayV2::Api" &&
+        resource.Properties?.ProtocolType === "WEBSOCKET"
+      )
+        throw new Error(
+          `Local mode does not support WebSocket APIs (${stack.stackName}/${id}).`
+        );
+      if (
         resource.Type === "AWS::Lambda::EventSourceMapping" &&
         !isQueueArn(stack, resource.Properties?.EventSourceArn)
       )

@@ -10,6 +10,7 @@ import { WebSocketLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integra
 import {} from "aws-cdk-lib/aws-apigatewayv2";
 import { Effect, Policy, PolicyStatement } from "aws-cdk-lib/aws-iam";
 
+import { useLocal } from "../local.js";
 import { App } from "./App.js";
 import { Stack } from "./Stack.js";
 import { getFunctionRef, SSTConstruct, isCDKConstruct } from "./Construct.js";
@@ -289,6 +290,8 @@ export class WebSocketApi extends Construct implements SSTConstruct {
 
   constructor(scope: Construct, id: string, props?: WebSocketApiProps) {
     super(scope, props?.cdk?.id || id);
+    if (useLocal())
+      throw new Error("Local mode does not support WebSocket APIs.");
 
     this.id = id;
     this.props = props || {};

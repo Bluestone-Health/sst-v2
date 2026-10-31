@@ -2,7 +2,7 @@
 
 import { blue, red } from "colorette";
 
-import { program } from "./program.js";
+import { program, parse } from "./program.js";
 import { SilentError, VisibleError } from "../error.js";
 import { useSpinners } from "./spinner.js";
 
@@ -78,4 +78,4 @@ if (Number(nodeVersion.split(".")[0]) < 18) {
   );
 }
 
-program.parse();
+parse();

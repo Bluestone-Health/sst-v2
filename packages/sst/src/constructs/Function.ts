@@ -1163,8 +1163,17 @@ export class Function extends CDKFunction implements SSTConstruct {
 
     this.attachPermissions(props.permissions || []);
 
-    if (useLocal() && !isLiveDevEnabled)
-      this.addEnvironment("AWS_ENDPOINT_URL", `http://host.docker.internal:${new URL(useLocal()!.endpoint).port || "80"}`);
+    if (useLocal() && !isLiveDevEnabled) {
+      this.addEnvironment(
+        "AWS_ENDPOINT_URL",
+        `http://host.docker.internal:${new URL(useLocal()!.endpoint).port || "80"}`
+      );
+      // S3 virtual-host bucket names must resolve inside LocalStack's Lambda network.
+      this.addEnvironment(
+        "AWS_ENDPOINT_URL_S3",
+        "http://s3.localhost.localstack.cloud:4566"
+      );
+    }
 
     // Add config
     this.addEnvironment("SST_APP", app.name, { removeInEdge: true });
