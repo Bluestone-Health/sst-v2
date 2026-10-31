@@ -1,70 +1,39 @@
 ---
 name: sst-local-runner
-description: Run and debug this SST v2 fork with Docker LocalStack, isolated local Lambda workers, RDS Data API, and CodeBuild. Use for sst dev --local, local environment replication, local resource compatibility, or preparing headless local-runner checks.
+description: Run and debug this SST v2 fork with Docker LocalStack, local Node Lambda workers, RDS Data API, and CodeBuild. Use for local environment setup, runner compatibility fixes, or headless execution prerequisites.
 ---
 
 # SST local runner
 
-Use this workflow for local emulation. Ordinary `sst dev`, `deploy`, and `bind` retain AWS behavior. Select `--local` explicitly for runner, bind, and secret commands.
+Read the maintained walkthrough for the task:
 
-Read [the base walkthrough](../../../examples/localstack/README.md) for the S3/SQS/PostgreSQL fixture. Read [the Scheduler resource walkthrough](../../../examples/localstack-scheduler/README.md) for HTTP APIs, FIFO queues, DynamoDB, SNS, Jobs, and site bindings. Follow the selected fixture's commands; do not combine their environment IDs or ports.
+- [Base fixture](../../../examples/localstack/README.md): S3, SQS, PostgreSQL and isolated checkout verification.
+- [Scheduler resource fixture](../../../examples/localstack-scheduler/README.md): HTTP APIs, FIFO queues, DynamoDB, SNS, Jobs and site bindings.
 
-## Preflight and credentials
+Use those setup and smoke commands rather than reconstructing them. `sst dev --local` and `sst local` select this backend. Ordinary SST commands retain AWS behavior; bind and secrets operations also need explicit local mode.
 
-- Use Node 22, pnpm 10, Docker Compose, and a working Docker daemon socket. Jobs and Lambda helpers spawn containers. The Scheduler overlay needs an absolute host bind directory, not only a named volume.
-- Inspect existing processes, Compose projects, and `.sst/local/<id>/session.lock` before starting anything. Reuse an environment only when it belongs to this task. Otherwise choose a separate checkout, environment ID, Compose project, LocalStack port, bridge port, and frontend ports.
-- Use an authorized LocalStack entitlement covering RDS Data API, CodeBuild when needed, and the intended developer/agent or CI use. Ask for missing license decisions; do not buy a plan or assume a trial permits the intended use.
-- On a developer machine, `lstk login` performs interactive login and stores a developer credential. It is unnecessary when an authorized token is already supplied. **This repository starts Docker Compose, which does not read the `lstk` keyring.** The launching shell must receive `LOCALSTACK_AUTH_TOKEN` from the developer's approved credential source. Ask for the source, never the token in chat. Do not extract keyring entries or change `~/.aws` as a setup shortcut.
-- In CI/shared headless runners, have the workspace owner provide a **CI Auth Token** through the secret store as `LOCALSTACK_AUTH_TOKEN`. Do not run browser login, reuse a personal developer token, or assume AWS OIDC replaces the LocalStack credential. `lstk` itself is optional for the Compose workflow.
-- Check token presence without printing it: `test -n "${LOCALSTACK_AUTH_TOKEN:-}"`. Never print the environment, expanded Compose configuration, or credential-bearing container metadata. No AWS SSO, AWS profile, or real AWS credentials are required; SST supplies dummy credentials and local endpoints.
+## Prerequisites
 
-LocalStack documents [token types and Docker injection](https://docs.localstack.cloud/aws/getting-started/auth-token/), [lstk login](https://docs.localstack.cloud/aws/developer-tools/running-localstack/lstk/authentication/), and [headless authentication](https://docs.localstack.cloud/aws/ci-pipelines/best-practices/). Recheck these if the installed CLI or licensing behavior differs; `lstk auth` is not the legacy `localstack auth` command.
+Use Node 22, pnpm 10 and Docker Compose with a working Docker socket. Lambda helpers and Jobs spawn containers. CodeBuild needs the documented host bind directory. Containers must reach host workers through `host.docker.internal`; remote Docker or restricted container runners need that topology verified separately.
 
-## Start and bind
+Use an authorized LocalStack entitlement for the required services and execution context. Developer login uses `lstk login` when needed, but Compose does not read its keyring: inject `LOCALSTACK_AUTH_TOKEN` through an approved credential source. Headless/shared CI uses a dedicated CI Auth Token from the runner's secret store, without browser login. Missing credentials or licensing are prerequisites to resolve with the operator, not a reason to switch backends.
 
-1. Install dependencies and build this checkout's `packages/sst`. Use the fixture's installation instructions and pinned image; do not substitute `latest` or start an unrelated default instance with `lstk start`.
-2. Select and record `COMPOSE_PROJECT_NAME`, `LOCALSTACK_PORT`, environment ID, and bridge port. For CodeBuild, create a private absolute `LOCALSTACK_DATA_DIR` and retain it for this Docker project's lifetime. Use both `examples/localstack/compose.yaml` and `examples/localstack-scheduler/compose.yaml` as documented.
-3. Keep Compose's `PERSISTENCE=0` and telemetry disabled. State stays on this machine/runner; do not use Cloud Pods, remote environments, replication from AWS, or cloud snapshot storage. License activation and image/package downloads still need network access; this is not air-gapped operation.
-4. Start the selected Compose project. Verify `/_localstack/health` and `/_localstack/info` at its own endpoint. The latter should report `is_license_activated: true`; report the boolean/edition only, not a full configuration dump. A successful `lstk login` alone does not prove the Compose container has a valid license.
-5. Load synthetic secrets, then start the app from its directory:
+Check token presence without printing its value. Do not dump expanded Compose configuration or container credentials. This runner needs no real AWS credentials or profile setup. Consult LocalStack's [authentication](https://docs.localstack.cloud/aws/getting-started/auth-token/) and [CI guidance](https://docs.localstack.cloud/aws/ci-pipelines/best-practices/) if the installed version behaves differently.
 
-   ```sh
-   pnpm exec sst secrets load secrets.example.env \
-     --local --env scheduler --endpoint http://127.0.0.1:4569
-   pnpm exec sst dev --local --env scheduler \
-     --endpoint http://127.0.0.1:4569 --port 13561
-   ```
+## Operate and verify
 
-   These values belong to the Scheduler **fixture**. Choose free values for another environment. `--env scheduler` produces stage `local-scheduler`; it is not an AWS dev-stage lease.
+- Inspect existing processes, environment locks and Compose projects first. Use distinct checkout/state, environment ID, project, and ports for concurrent environments. Do not interrupt another task's session.
+- Use the pinned Compose image and overlay for the selected fixture. Keep snapshots and telemetry disabled. Do not use Cloud Pods, remote environments, or AWS replication. Activation and package/image downloads still require network access.
+- Load synthetic secrets only. Wait for `Local ready`, after deployment and migrations, before smoke checks. Bind scripts/sites to the same environment ID and loopback endpoint; missing bridge state means start that runner first.
+- Read that environment's `.sst/local/<id>/outputs.json` and private logs. Local state includes credentials. Specify log redirection explicitly; a log-directory variable does not redirect stdout.
+- Build `packages/sst` before tests, which import `dist`. Run regressions for changed paths; synthesis or Docker health alone does not prove application behavior. Use the verification network guard when testing local-only Node traffic, while recognizing that it is not a Docker/OS firewall.
+- SDK v2 needs explicit endpoints. Docker and host endpoints differ; preserve service-specific routing. Downstream applications should use an approved packaged SST build with compatible CDK identities, not arbitrary cross-checkout symlinks or version changes.
+- Keep emulator SQL compatibility in SST's Data API bridge. Do not edit downstream historical migrations or business logic to hide emulator bugs. Preserve invocation/database credential separation and upstream errors.
 
-6. Wait for `Local ready`, after deployment and migrations. Keep SST running. Bind scripts and sites to the same ID and endpoint:
+## Stop and report
 
-   ```sh
-   cd site
-   node ../../../packages/sst/dist/cli/sst.js bind --local --env scheduler \
-     --endpoint http://127.0.0.1:4569 node check.mjs
-   ```
+Stop only this task's processes and Docker project. Ask before deleting data or interrupting user-owned sessions. Confirm lock ownership before recovery; do not globally prune Docker. SST restarts preserve data while Docker remains up. Snapshots are disabled, so Docker restarts need a fresh local environment as documented.
 
-   This is the documented fixture site-binding check. For another app, bind its actual script or dev server. The endpoint must be `http://127.0.0.1:<port>`. Bind discovers the active authenticated bridge; missing bridge state means start the matching runner, not fall back to AWS.
+Host Node handlers reload and support breakpoints. Job/infrastructure edits need SST restart. Jobs run in CodeBuild containers and cannot be cancelled locally. Schedules and inbound email are exercised manually. Unsupported services fail explicitly; local checks do not establish AWS parity.
 
-## Verify and diagnose
-
-- Run the chosen walkthrough's smoke check only after readiness. The Scheduler fixture's smoke writes synthetic records and checks Jobs, retries/DLQ, SES capture, and manual schedule/email delivery. Its site-binding check currently asserts the documented port 4569; adapt that assertion in a disposable checkout if testing other ports.
-- For changes to SST, build `packages/sst` before its tests: tests import `dist`. Use focused tests for the touched path and the full suite when changing shared constructs or runtime behavior. A running Docker container alone is not evidence that handlers, migrations, or business flows work.
-- Read `.sst/local/<id>/outputs.json` and logs for that environment. Treat `.sst/local` as private: it contains bearer tokens and synthetic database credentials. Record logs at an explicit task-owned path. `LOCALSTACK_LOG_DIR` is a Scheduler smoke-reader setting, not automatic log redirection; use `tee` or shell redirection when file logs are needed.
-- For local-only verification, use `examples/localstack/network-guard.cjs` as a Node preload on the runner/bound process after dependencies are installed. It covers worker HTTP/SDK/fetch traffic, not all process or Docker egress. Keep application integrations synthetic or local; the guard does not make arbitrary applications offline-safe.
-- SDK v3 uses configured local endpoints. SDK v2 needs explicit endpoints; SQS v3 needs `useQueueUrlAsEndpoint: false`. Docker helpers/Jobs must reach the host bridge through `host.docker.internal`; `127.0.0.1` inside a container is not the worker host.
-- For downstream Scheduler, install a tarball packed from the built `packages/sst/dist`, or the approved published artifact. Do not link a separate CDK installation or change downstream CDK/constructs pins to hide duplicate-class errors. Keep machine-specific `file:` overrides out of commits unless explicitly requested.
-- Local Data API compatibility belongs in `src/runtime/local-data-api.ts` under `packages/sst`. Preserve SQL/error/transaction behavior; do not edit an application's historical migrations to accommodate the emulator. Existing workarounds cover narrow text projections and single dollar-quoted `DO` blocks, not arbitrary SQL.
-
-## Headless execution and stopping
-
-Use a runner that can run Docker containers and expose the host worker bridge to them, with host bind paths visible to the Docker daemon. A remote Docker daemon or restricted ECS task is not automatically compatible. Linux host-gateway configuration is supplied; the recorded end-to-end verification is macOS/OrbStack, so verify routing on the target runner before claiming CI support.
-
-Inject the CI token, use a fresh task-owned environment, and supervise the long-lived SST process with bounded readiness/health waits. Run checks while it is alive. Capture private logs and stop only processes/Compose resources created by this job. This skill does not itself authorize changing CI workflows, adding secrets, or publishing artifacts.
-
-Ask before interrupting an existing user-owned environment or deleting its data. Do not delete a lock until its recorded process is confirmed dead. Do not run global Docker prune or the destructive isolation verification script against a developer's environment. Snapshots are disabled: an SST restart preserves data while Docker stays running; a Docker restart requires a fresh local environment and checkout state reset as documented.
-
-Host Lambda code reloads and supports breakpoints. Restart SST for infrastructure or Job code changes. Jobs run in CodeBuild containers; host breakpoints and cancellation are unavailable. Schedules are manual and inbound mail uses synthetic S3 injection. Keep these limits in the handoff.
-
-Report the checkout/build, environment/stage, region, Compose project, endpoints, owned processes, log paths, checks, and remaining blockers. Do not report a successful deployment or full parity based only on synthesis.
+Report the checkout/build, ID/stage, region, Compose project, ports, processes, private log paths and checks actually run. State missing prerequisites and unverified runner/platform behavior. Starting an environment does not authorize CI configuration changes or publishing.

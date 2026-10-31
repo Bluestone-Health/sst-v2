@@ -69,20 +69,41 @@ export const bind = (program: Program) =>
           const { Config } = await import("../../config.js");
           const fs = await import("fs/promises");
           const project = useProject();
-          const bridge = JSON.parse(
-            await fs.readFile(
-              path.join(project.paths.out, "bridge.json"),
-              "utf8"
-            )
-          );
-          configureLocal({
-            ...useLocal()!,
-            port: bridge.port,
-            token: await fs.readFile(
+          const invalidBridge = () =>
+            new VisibleError(
+              `Local bridge state is missing or invalid. Start sst dev --local --env ${
+                useLocal()!.id
+              } first.`
+            );
+          try {
+            const bridge: unknown = JSON.parse(
+              await fs.readFile(
+                path.join(project.paths.out, "bridge.json"),
+                "utf8"
+              )
+            );
+            const token = await fs.readFile(
               path.join(project.paths.out, "bridge-token"),
               "utf8"
-            ),
-          });
+            );
+            if (
+              !bridge ||
+              typeof bridge !== "object" ||
+              Array.isArray(bridge) ||
+              !("port" in bridge) ||
+              typeof bridge.port !== "number" ||
+              !Number.isInteger(bridge.port) ||
+              bridge.port < 1024 ||
+              bridge.port > 65535 ||
+              !/^[A-Za-z0-9_-]{32,}$/.test(token)
+            )
+              throw invalidBridge();
+            configureLocal({ ...useLocal()!, port: bridge.port, token });
+          } catch (error: any) {
+            if (error.code === "ENOENT" || error instanceof SyntaxError)
+              throw invalidBridge();
+            throw error;
+          }
           const sites = JSON.parse(
             await fs
               .readFile(path.join(project.paths.out, "sites.json"), "utf8")

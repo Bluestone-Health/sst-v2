@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { expect, test } from "vitest";
 import { Template, Match } from "aws-cdk-lib/assertions";
 import { createApp } from "./helper.js";
@@ -61,8 +62,12 @@ test("local constructs retain API domains without DNS lookups, package Scripts, 
         }),
         Match.objectLike({
           Name: "AWS_ENDPOINT_URL_RDS_DATA",
-          Value:
-            "http://host.docker.internal:13561/rds-data/local-test-token-with-more-than-32-characters",
+          Value: `http://host.docker.internal:13561/rds-data/${createHmac(
+            "sha256",
+            "local-test-token-with-more-than-32-characters"
+          )
+            .update("rds-data")
+            .digest("hex")}`,
         }),
       ]),
     },

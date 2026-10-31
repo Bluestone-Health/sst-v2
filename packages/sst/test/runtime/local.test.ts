@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { randomUUID, randomBytes } from "node:crypto";
+import { randomUUID, randomBytes, createHmac } from "node:crypto";
 import { once } from "node:events";
 import { createInterface } from "node:readline";
 
@@ -112,7 +112,12 @@ test("local bridge isolates real invocations, failures, deadlines and reloads", 
         body: "{}",
       });
     expect((await dataApi("wrong")).status).toBe(401);
-    expect((await dataApi(token)).status).toBe(404);
+    const dataKey = createHmac("sha256", token)
+      .update("rds-data")
+      .digest("hex");
+    expect((await dataApi(token)).status).toBe(401);
+    expect((await dataApi(dataKey)).status).toBe(404);
+    expect((await invoke({}, {}, dataKey)).status).toBe(401);
     expect((await invoke({}, { functionID: "missing" })).status).toBe(400);
     expect((await invoke({}, { functionID: "unsupported" })).status).toBe(400);
     expect((await invoke({}, { deadline: -1 })).status).toBe(400);

@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { expect, test } from "vitest";
 import { createServer } from "node:http";
 import { mkdtemp, mkdir, writeFile, rm, realpath } from "node:fs/promises";
@@ -107,7 +108,12 @@ test("local bind rejects inherited secrets and binds only local site values", as
     );
     const out = path.join(root, ".sst/local/review");
     const bridgeToken = "local-bind-token-with-more-than-32-characters";
-    const dataEndpoint = `http://127.0.0.1:13573/rds-data/${bridgeToken}`;
+    const dataEndpoint = `http://127.0.0.1:13573/rds-data/${createHmac(
+      "sha256",
+      bridgeToken
+    )
+      .update("rds-data")
+      .digest("hex")}`;
     await mkdir(out, { recursive: true });
     await writeFile(
       path.join(out, "bridge.json"),
@@ -181,6 +187,81 @@ test("local bind rejects inherited secrets and binds only local site values", as
     expect(result.output).toContain("local site bindings passed");
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("local bind explains missing or malformed bridge state before contacting AWS", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "sst-invalid-bridge-"));
+  const out = path.join(root, ".sst/local/review");
+  try {
+    await writeFile(path.join(root, "package.json"), '{"type":"module"}');
+    await writeFile(
+      path.join(root, "sst.config.mjs"),
+      'export default {config(){return {name:"review",region:"us-east-1"}},stacks(){}}'
+    );
+    await mkdir(out, { recursive: true });
+    for (const [bridge, token] of [
+      [undefined, undefined],
+      ['{"port":13573}', undefined],
+      ["{broken", "test-token-with-at-least-32-characters"],
+      ["null", "test-token-with-at-least-32-characters"],
+      ['{"port":"13573"}', "test-token-with-at-least-32-characters"],
+      ['{"port":13573}', ""],
+      ['{"port":13573}', "with spaces and at least thirty two characters"],
+    ]) {
+      await rm(path.join(out, "bridge.json"), { force: true });
+      await rm(path.join(out, "bridge-token"), { force: true });
+      if (bridge !== undefined)
+        await writeFile(path.join(out, "bridge.json"), bridge);
+      if (token !== undefined)
+        await writeFile(path.join(out, "bridge-token"), token);
+      const result = await new Promise<{ code: number | null; output: string }>(
+        (resolve, reject) => {
+          const child = spawn(
+            process.execPath,
+            [
+              path.join(dist, "cli/sst.js"),
+              "bind",
+              "--local",
+              "--env",
+              "review",
+              "--endpoint",
+              "http://127.0.0.1:9",
+              process.execPath,
+              "-e",
+              "process.exit(99)",
+            ],
+            {
+              cwd: root,
+              env: { ...process.env, SST_TELEMETRY_DISABLED: "1" },
+              stdio: ["ignore", "pipe", "pipe"],
+            }
+          );
+          let output = "";
+          child.stdout.on("data", (chunk) => (output += chunk));
+          child.stderr.on("data", (chunk) => (output += chunk));
+          const timer = setTimeout(() => {
+            if (child.pid) kill(child.pid, "SIGKILL");
+            reject(new Error("bind timeout"));
+          }, 10000);
+          child.once("error", (error) => {
+            clearTimeout(timer);
+            reject(error);
+          });
+          child.once("exit", (code) => {
+            clearTimeout(timer);
+            resolve({ code, output });
+          });
+        }
+      );
+      expect(result.code, result.output).toBe(1);
+      expect(result.output).toContain("Start sst dev --local --env review");
+      expect(result.output).not.toMatch(
+        /ECONNREFUSED|SyntaxError|Cannot read properties/
+      );
+    }
+  } finally {
     await rm(root, { recursive: true, force: true });
   }
 });

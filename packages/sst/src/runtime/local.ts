@@ -6,7 +6,7 @@ import { useFunctions } from "../constructs/Function.js";
 import { useFunctionBuilder, useRuntimeHandlers } from "./handlers.js";
 import { startRuntimeServer } from "./server.js";
 import type {} from "./runtime.js";
-import { useLocal, localEnvironment } from "../local.js";
+import { useLocal, localEnvironment, localDataApiKey } from "../local.js";
 import { localDataApi } from "./local-data-api.js";
 import { useProject } from "../project.js";
 
@@ -37,6 +37,7 @@ export async function startLocalBridge(options: {
       "The local bridge requires a random token of at least 32 characters."
     );
   const expected = Buffer.from(`Bearer ${options.token}`);
+  const databaseKey = Buffer.from(`Bearer ${localDataApiKey(options.token)}`);
   const runtime = await startRuntimeServer({ host: "127.0.0.1", port: 0 });
   const bus = useBus();
   const builder = useFunctionBuilder();
@@ -48,9 +49,12 @@ export async function startLocalBridge(options: {
         ? `Bearer ${req.path.split("/")[2]}`
         : req.headers.authorization || ""
     );
+    const credential = req.path.startsWith("/rds-data/")
+      ? databaseKey
+      : expected;
     if (
-      provided.length !== expected.length ||
-      !timingSafeEqual(provided, expected)
+      provided.length !== credential.length ||
+      !timingSafeEqual(provided, credential)
     ) {
       res.status(401).json({ errorMessage: "Invalid local bridge token" });
       return;

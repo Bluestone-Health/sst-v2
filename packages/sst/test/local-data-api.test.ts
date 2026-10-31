@@ -1,10 +1,11 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import {
   rewriteTextCasts,
   rewriteDoBlock,
   localDataApi,
 } from "../dist/runtime/local-data-api.js";
 import express from "express";
+import { Logger } from "../dist/logger.js";
 import { once } from "node:events";
 import {
   RDSDataClient,
@@ -33,6 +34,8 @@ test("local Data API leaves SQL outside the supported projection pattern intact"
     'select /* "dob"::text as "dob" */ 1',
     'select -- "dob"::text as "dob"\n1',
     'with p as (select "dob"::text as "dob" from "patients") select * from p',
+    'select cast("date"::text as "date") from "events"',
+    'select distinct on ("dob") "dob"::text as "dob" from "patients" order by 1',
     'select * from (select "dob"::text as "dob" from "patients") p',
     'select "dob"::text as "dob" from "patients" order by "dob"',
     'select "dob"::text as "dob" from "patients" union select "dob" from p',
@@ -159,6 +162,14 @@ test("local Data API preserves SDK records, transaction payloads and upstream fa
       new ExecuteStatementCommand({ ...input, formatRecordsAs: "JSON" })
     );
     expect(received.sql).toBe(input.sql);
+    await client.send(
+      new ExecuteStatementCommand({
+        ...input,
+        sql: "DO $$ BEGIN PERFORM 1; END $$;",
+        formatRecordsAs: "JSON",
+      })
+    );
+    expect(received.sql).toBe(String.raw`DO E' BEGIN PERFORM 1\073 END '`);
   } finally {
     client.destroy();
     server.close();
@@ -195,4 +206,61 @@ test("local Data API leaves unsupported procedural and multiple statements uncha
     "-- DO $$ BEGIN PERFORM 1; END $$;",
   ])
     expect(rewriteDoBlock(sql)).toBe(sql);
+});
+
+test("local Data API logs safe forwarding diagnostics without request contents", async () => {
+  const log = vi.spyOn(Logger, "debug").mockImplementation(() => {});
+  const secret =
+    "http://127.0.0.1/rds-data/private-token secret-sql secret-parameter";
+  const error = new TypeError(secret, { cause: { code: "ECONNREFUSED" } });
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(error));
+  let status = 0;
+  let response: unknown;
+  const res = {
+    status(value: number) {
+      status = value;
+      return this;
+    },
+    json(value: unknown) {
+      response = value;
+    },
+  };
+  try {
+    const proxy = localDataApi({
+      endpoint: "http://127.0.0.1:4569",
+      region: "us-east-1",
+    });
+    await proxy(
+      {
+        params: { action: "Execute" },
+        body: { sql: "secret-sql", parameters: ["secret-parameter"] },
+      } as any,
+      res as any
+    );
+    expect(status).toBe(502);
+    expect(response).toEqual({ message: "Local Data API request failed" });
+    expect(log).toHaveBeenCalled();
+    const diagnostics = JSON.stringify(log.mock.calls);
+    expect(diagnostics).toContain("TypeError");
+    expect(diagnostics).toContain("ECONNREFUSED");
+    expect(diagnostics).not.toMatch(
+      /private-token|secret-sql|secret-parameter/
+    );
+    vi.mocked(fetch).mockResolvedValue(
+      new Response("secret-sql", { status: 200 })
+    );
+    await proxy(
+      {
+        params: { action: "Execute" },
+        body: { sql: 'select "dob"::text as "dob" from patients' },
+      } as any,
+      res as any
+    );
+    expect(status).toBe(502);
+    expect(JSON.stringify(log.mock.calls)).toContain("SyntaxError");
+    expect(JSON.stringify(log.mock.calls)).not.toContain("secret-sql");
+  } finally {
+    vi.unstubAllGlobals();
+    log.mockRestore();
+  }
 });

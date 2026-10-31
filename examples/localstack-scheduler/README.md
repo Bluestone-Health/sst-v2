@@ -99,12 +99,15 @@ the AWS-backed `sst dev` workflow.
 
 - Live Node Lambdas retain host breakpoints and source watching.
 - Data API calls from live workers, bound commands, packaged Lambdas and Jobs
-  use SST's authenticated local bridge. It works around the pinned emulator's
+  use SST's authenticated local bridge with a database-only credential, separate
+  from the invocation credential. It works around the pinned emulator's
   duplicate-column and incorrect date metadata errors for simple, quoted
-  `column::text AS column` projections. SQL containing literals, comments,
-  nested queries or references to the cast alias in ordering/grouping passes
-  through unchanged, as does JSON result mode. This is a narrow compatibility
-  fix, not a general SQL translator. Start `sst dev --local` before `sst bind
+  `column::text AS column` projections. Projection rewriting skips SQL with
+  literals, comments, nested queries, or references to the cast alias in
+  ordering/grouping. Nested cast targets and DISTINCT ON queries are not
+  rewritten. JSON result mode skips projection rewriting; procedural DO encoding
+  applies to both result formats. This is a narrow compatibility fix, not a
+  general SQL translator. Start `sst dev --local` before `sst bind
   --local`; bind reads that environment's bridge connection automatically.
 - `Script` handlers with live development disabled are packaged and executed
   by LocalStack Lambda, including deployment callbacks.

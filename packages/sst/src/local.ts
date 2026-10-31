@@ -1,3 +1,4 @@
+import { createHmac } from "crypto";
 import { VisibleError } from "./error.js";
 
 interface LocalOptions {
@@ -9,11 +10,16 @@ interface LocalOptions {
 let local: LocalOptions | undefined;
 export const useLocal = () => local;
 
+/** Database access must not grant invocation access to the host bridge. */
+export function localDataApiKey(token: string) {
+  return createHmac("sha256", token).update("rds-data").digest("hex");
+}
+
 export function localDataApiEndpoint(docker = false) {
   if (!local?.token) return undefined;
   return `http://${docker ? "host.docker.internal" : "127.0.0.1"}:${
     local.port
-  }/rds-data/${local.token}`;
+  }/rds-data/${localDataApiKey(local.token)}`;
 }
 
 export function configureLocal(options: LocalOptions) {

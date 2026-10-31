@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { Logger } from "../logger.js";
 import { SignatureV4 } from "@smithy/signature-v4";
 import { Sha256 } from "@aws-crypto/sha256-js";
 
@@ -15,14 +16,25 @@ export function rewriteTextCasts(sql: string) {
   if (tokens.some((token) => token[0].toLowerCase() === "into"))
     return unchanged;
   const from = tokens.findIndex((token) => token[0].toLowerCase() === "from");
-  if (from < 0) return unchanged;
+  if (from < 0 || (word(1) === "distinct" && word(2) === "on"))
+    return unchanged;
   const name = (token: string) =>
     token.startsWith('"')
       ? token.slice(1, -1).replaceAll('""', '"')
       : token.toLowerCase();
   const aliases: Record<string, string> = Object.create(null);
   const edits: { start: number; end: number; value: string }[] = [];
+  let depth = 0;
   for (let i = 1; i + 4 < from; i++) {
+    if (word(i) === "(") {
+      depth++;
+      continue;
+    }
+    if (word(i) === ")") {
+      depth--;
+      continue;
+    }
+    if (depth !== 0) continue;
     const column = tokens[i][0];
     const alias = tokens[i + 4][0];
     if (
@@ -98,11 +110,13 @@ export function localDataApi(options: { endpoint: string; region: string }) {
       res.status(400).json({ message: "Invalid Data API request" });
       return;
     }
+    const sql =
+      req.params.action === "Execute" && typeof req.body.sql === "string"
+        ? rewriteDoBlock(req.body.sql)
+        : undefined;
     const query =
-      req.params.action === "Execute" &&
-      req.body.formatRecordsAs !== "JSON" &&
-      typeof req.body.sql === "string"
-        ? rewriteTextCasts(rewriteDoBlock(req.body.sql))
+      sql !== undefined && req.body.formatRecordsAs !== "JSON"
+        ? rewriteTextCasts(sql)
         : undefined;
     try {
       const signed = await signer.sign({
@@ -114,7 +128,7 @@ export function localDataApi(options: { endpoint: string; region: string }) {
         headers: { host: endpoint.host, "content-type": "application/json" },
         body: JSON.stringify({
           ...req.body,
-          ...(query ? { sql: query.sql } : {}),
+          ...(sql !== undefined ? { sql: query?.sql ?? sql } : {}),
         }),
       });
       const upstream = await fetch(`${endpoint.origin}${signed.path}`, {
@@ -148,7 +162,22 @@ export function localDataApi(options: { endpoint: string; region: string }) {
         if (value) res.setHeader(header, value);
       }
       res.status(upstream.status).send(body);
-    } catch {
+    } catch (error) {
+      // Error messages may contain SQL, returned data, or the credential-bearing URL.
+      const name = error instanceof Error ? error.name : "Error";
+      const code = (error as { cause?: { code?: unknown } })?.cause?.code;
+      Logger.debug("Local Data API request failed", {
+        name: /^[A-Za-z]+Error$|^Error$/.test(name) ? name : "Error",
+        message:
+          error instanceof SyntaxError
+            ? "Invalid JSON from LocalStack"
+            : name === "TimeoutError" || name === "AbortError"
+            ? "LocalStack request timed out or aborted"
+            : "Unable to forward the request to LocalStack",
+        ...(typeof code === "string" && /^[A-Z][A-Z0-9_]{0,40}$/.test(code)
+          ? { code }
+          : {}),
+      });
       res.status(502).json({ message: "Local Data API request failed" });
     }
   };
