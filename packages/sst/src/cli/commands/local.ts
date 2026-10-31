@@ -41,26 +41,11 @@ export const local = (program: Program) =>
       const { fileURLToPath, pathToFileURL } = await import("url");
       const local = useLocal()!;
       const project = useProject();
+      const { acquireSessionLock } = await import("../../util/session-lock.js");
       const lock = path.join(project.paths.out, "session.lock");
-      try {
-        const owner = Number(await fs.readFile(lock, "utf8"));
-        try {
-          process.kill(owner, 0);
-          throw new Error(
-            `Local environment ${local.id} is already running (PID ${owner}).`
-          );
-        } catch (error: any) {
-          if (error.code !== "ESRCH") throw error;
-        }
-        await fs.unlink(lock);
-      } catch (error: any) {
-        if (error.code !== "ENOENT") throw error;
-      }
-      const handle = await fs.open(lock, "wx", 0o600);
-      await handle.writeFile(String(process.pid));
-      await handle.close();
+      const releaseLock = await acquireSessionLock(lock, local.id);
       const stop = async (code: number) => {
-        await fs.rm(lock, { force: true });
+        await releaseLock();
         process.exit(code);
       };
       process.once("SIGINT", () => void stop(0));

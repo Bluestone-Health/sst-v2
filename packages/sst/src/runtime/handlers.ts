@@ -189,6 +189,7 @@ interface Artifact {
 export const useFunctionBuilder = lazy(() => {
   const artifacts = new Map<string, Artifact>();
   const building = new Map<string, Promise<Artifact | undefined>>();
+  const dirty = new Set<string>();
   const handlers = useRuntimeHandlers();
   const semaphore = new Semaphore(4);
 
@@ -205,9 +206,13 @@ export const useFunctionBuilder = lazy(() => {
       const pending = (async () => {
         const unlock = await semaphore.lock();
         try {
-          const result = await handlers.build(functionID, "start");
-          if (!result || result.type === "error") return;
-          artifacts.set(functionID, result);
+          let built;
+          do {
+            dirty.delete(functionID);
+            built = await handlers.build(functionID, "start");
+          } while (dirty.has(functionID));
+          if (!built || built.type === "error") return;
+          artifacts.set(functionID, built);
           return artifacts.get(functionID)!;
         } finally {
           unlock();
@@ -235,6 +240,7 @@ export const useFunctionBuilder = lazy(() => {
           })
         )
           continue;
+        dirty.add(functionID);
         await result.build(functionID);
         Logger.debug("Rebuilt function", functionID);
       }

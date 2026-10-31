@@ -34,6 +34,7 @@ interface Worker {
 
 export const useRuntimeWorkers = lazy(async () => {
   const workers = new Map<string, Worker>();
+  const starting = new Set<string>();
   const bus = useBus();
   const handlers = useRuntimeHandlers();
   const builder = useFunctionBuilder();
@@ -59,11 +60,12 @@ export const useRuntimeWorkers = lazy(async () => {
     });
     lastRequestId.set(evt.properties.workerID, evt.properties.requestID);
     let worker = workers.get(evt.properties.workerID);
-    if (worker) return;
+    if (worker || starting.has(evt.properties.workerID)) return;
     const props = useFunctions().fromID(evt.properties.functionID);
     if (!props) return;
     const handler = handlers.for(props.runtime!);
     if (!handler) return;
+    starting.add(evt.properties.workerID);
     try {
       const build = await builder.artifact(evt.properties.functionID);
       if (!build || evt.properties.signal?.aborted) {
@@ -103,6 +105,8 @@ export const useRuntimeWorkers = lazy(async () => {
         errorMessage: String(error),
         trace: error instanceof Error ? error.stack?.split("\n") || [] : [],
       });
+    } finally {
+      starting.delete(evt.properties.workerID);
     }
   });
 
