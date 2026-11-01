@@ -10,6 +10,12 @@ For the latest version of SST, head over to [sst.dev](https://sst.dev) instead.
 
 ## Local development with Docker
 
+> **Deprecated / archival only — October 31, 2026.** The LocalStack backend is
+> no longer the chosen development approach for Bluestone Scheduler. Preserve
+> this branch as an experiment, not a release recommendation. The replacement
+> direction is a warm AI stage pool in a dedicated `ai-dev` AWS account.
+> See [the findings and decision](https://github.com/Bluestone-Health/sst-v2/issues/18).
+
 This fork includes experimental, opt-in `sst local` for Node.js handlers with LocalStack S3, SQS, and PostgreSQL/Data API. See the [local example walkthrough](examples/localstack/README.md) for setup and verification. Requires Node 22, Docker, and a LocalStack RDS/Data API entitlement; no AWS credentials are needed. LocalStack snapshots are disabled, so Docker restarts require a reset.
 
 See the [Scheduler resource example](examples/localstack-scheduler/README.md) for local HTTP APIs, DynamoDB, FIFO queues, SNS, Jobs, site bindings, and explicit schedule/email triggers.

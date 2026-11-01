@@ -1,5 +1,11 @@
 # Scheduler resource support
 
+> **Deprecated / archival only — October 31, 2026.** The LocalStack backend is
+> no longer the chosen development approach for Bluestone Scheduler. Preserve
+> this branch as an experiment, not a release recommendation. The replacement
+> direction is a warm AI stage pool in a dedicated `ai-dev` AWS account.
+> See [the findings and decision](https://github.com/Bluestone-Health/sst-v2/issues/18).
+
 This example exercises the additional SST resources used by Bluestone Scheduler.
 It uses synthetic handlers and data; it does not contact Scheduler's external
 integrations. Infrastructure runs in LocalStack Docker, Lambda handlers run in

@@ -1,9 +1,19 @@
 ---
 name: sst-local-runner
-description: Run and debug this SST v2 fork with Docker LocalStack, local Node Lambda workers, RDS Data API, and CodeBuild. Use for local environment setup, runner compatibility fixes, or headless execution prerequisites.
+description: Archived SST LocalStack experiment. Use only for explicitly requested historical reproduction or cleanup; prefer the planned warm AWS AI-stage workflow for new development.
 ---
 
 # SST local runner
+
+> **Deprecated / archival only — October 31, 2026.** The LocalStack backend is
+> no longer the chosen development approach for Bluestone Scheduler. Preserve
+> this branch as an experiment, not a release recommendation. The replacement
+> direction is a warm AI stage pool in a dedicated `ai-dev` AWS account.
+> See [the findings and decision](https://github.com/Bluestone-Health/sst-v2/issues/18).
+
+Do not start this backend for new development unless a human explicitly requests
+historical reproduction. The following instructions preserve the experiment;
+they do not provision the replacement AI stage pool.
 
 Read the maintained walkthrough for the task:
 

@@ -1,5 +1,11 @@
 # SST local example
 
+> **Deprecated / archival only — October 31, 2026.** The LocalStack backend is
+> no longer the chosen development approach for Bluestone Scheduler. Preserve
+> this branch as an experiment, not a release recommendation. The replacement
+> direction is a warm AI stage pool in a dedicated `ai-dev` AWS account.
+> See [the findings and decision](https://github.com/Bluestone-Health/sst-v2/issues/18).
+
 Experimental, opt-in `sst local` for Node.js handlers, S3, standard SQS, and PostgreSQL via RDS Data API. A LocalStack Lambda forwards to SST's existing compiler, watcher, and worker runtime. LocalStack owns event delivery and retries; every invocation gets its own host worker.
 
 ## Requirements
