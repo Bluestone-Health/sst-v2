@@ -16,6 +16,7 @@
     "prepare": "",
     "build": "node build.mjs && tsc",
     "test": "vitest run",
+    "test:cloudformation-xml": "node test/aws/packaged-cloudformation-xml.mjs",
     "dev": "tsc -w",
     "pack": "node pack.js"
   },
@@ -42,7 +43,7 @@
     "@aws-cdk/cx-api": "2.253.0",
     "@aws-cdk/toolkit-lib": "1.1.1",
     "@aws-crypto/sha256-js": "^5.2.0",
-    "@aws-sdk/client-cloudformation": "3.699.0",
+    "@aws-sdk/client-cloudformation": "3.1169.0",
     "@aws-sdk/client-ecs": "3.699.0",
     "@aws-sdk/client-eventbridge": "3.699.0",
     "@aws-sdk/client-iam": "3.699.0",
