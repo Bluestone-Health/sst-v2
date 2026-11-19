@@ -1,3 +1,4 @@
+import spawn from "cross-spawn";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import {
@@ -16,10 +17,26 @@ import { fileURLToPath } from "node:url";
 // security overrides as consumers. This also catches a stale dist manifest.
 const packageRoot = fileURLToPath(new URL("../../", import.meta.url));
 const temporary = mkdtempSync(join(tmpdir(), "sst-cloudformation-xml-"));
-const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 
 function run(command, args, cwd = temporary) {
   return execFileSync(command, args, { cwd, encoding: "utf8", stdio: "pipe" });
+}
+
+function runNpm(args, cwd = temporary) {
+  // cross-spawn handles Windows command shims and argument escaping.
+  const result = spawn.sync("npm", args, {
+    cwd,
+    encoding: "utf8",
+    stdio: "pipe",
+  });
+  if (result.error || result.status !== 0) {
+    throw Object.assign(
+      result.error ??
+        new Error(`npm ${args[0]} failed (${result.signal ?? result.status})`),
+      { stdout: result.stdout, stderr: result.stderr }
+    );
+  }
+  return result.stdout;
 }
 
 try {
@@ -32,8 +49,7 @@ try {
     : join(
         temporary,
         JSON.parse(
-          run(
-            npm,
+          runNpm(
             [
               "pack",
               "--ignore-scripts",
@@ -61,7 +77,7 @@ try {
     })
   );
   console.log("Installing the packaged SST XML regression fixture...");
-  run(npm, ["install", "--ignore-scripts", "--no-audit", "--no-fund"]);
+  runNpm(["install", "--ignore-scripts", "--no-audit", "--no-fund"]);
 
   const require = createRequire(join(temporary, "package.json"));
   const sstRequire = createRequire(require.resolve("sst/package.json"));
