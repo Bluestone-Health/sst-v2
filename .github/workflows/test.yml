@@ -47,6 +47,10 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Test packaged CloudFormation XML parsing
+        run: pnpm run test:cloudformation-xml
+        working-directory: packages/sst
+
       - name: Test
         run: pnpm test
         working-directory: packages/sst

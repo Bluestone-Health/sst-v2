@@ -109,6 +109,12 @@ When updating dependencies in `packages/sst/package.json`, you must manually syn
 
 _Note_: The `dist/package.json` is tracked in git and must be kept in sync with the source `package.json`. The build process does not automatically copy this file.
 
+After building, run `cd packages/sst && pnpm run test:cloudformation-xml` to
+validate CloudFormation XML deserialization for the SST and CDK clients in an
+isolated tarball consumer with patched XML dependencies. This check downloads
+dependencies, uses mocked HTTP responses, and does not contact AWS. Pass a tarball path to test an existing
+artifact: `pnpm run test:cloudformation-xml /absolute/path/to/sst.tgz`.
+
 ### Packaging a BSH release
 
 1. Merge changes to [`main-bsh](https://github.com/Bluestone-Health/sst-v2/tree/main-bsh), where you can also rebase off the upstream if desired.
